@@ -2,7 +2,7 @@
 
 Quantitative trading based on https://doi.org/10.3390/electronics12183960
 
-## Getting Started
+## Getting Started
 
 ### Python
 
