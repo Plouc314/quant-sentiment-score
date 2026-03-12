@@ -4,3 +4,5 @@ __pycache__/
 .venv/
 .env
 data/**/*.csv
+data/**/*.txt
+.DS_Store
