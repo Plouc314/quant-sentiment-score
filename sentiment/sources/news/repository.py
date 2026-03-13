@@ -75,6 +75,14 @@ class ArticleRepository:
             language=row["language"],
         )
 
+    def article_ids(self) -> list[str]:
+        """Return all article IDs from the in-memory index."""
+        return self._df["id"].tolist()
+
+    def load_all(self) -> list[Article]:
+        """Load every article in the index."""
+        return [self.load(aid) for aid in self.article_ids()]
+
     def exists(self, url: str) -> bool:
         """Return True if a URL is already in the index."""
         return url in self._df["url"].values
