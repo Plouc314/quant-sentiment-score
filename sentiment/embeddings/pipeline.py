@@ -5,6 +5,7 @@ import logging
 import numpy as np
 import pandas as pd
 
+from ..sources.news.models import Article
 from .encoder import SentimentEncoder
 from .summarizer import Summarizer
 
@@ -23,13 +24,13 @@ class SentimentPipeline:
         self.summarizer = Summarizer(device)
         self.encoder = SentimentEncoder(device)
 
-    def process_article(self, title: str, content: str) -> dict:
+    def process_article(self, article: Article) -> dict:
         """Process a single article through the full pipeline.
 
         Returns {"summary": str, "label": int, "embedding": np.ndarray}.
         """
-        title = (title or "").strip()
-        content = (content or "").strip()
+        title = (article.get("title") or "").strip()
+        content = (article.get("text") or "").strip()
 
         if not title and not content:
             logger.warning("Article has no title or content — returning zero embedding")
@@ -45,16 +46,15 @@ class SentimentPipeline:
 
         return {"summary": summary, "label": label, "embedding": embedding}
 
-    def process_batch(self, articles: list[dict]) -> list[dict]:
+    def process_batch(self, articles: list[Article]) -> list[dict]:
         """Process multiple articles sequentially.
 
-        Each element should be ``{"title": str, "content": str}``.
         Returns a list of result dicts (same length, same order).
         """
         results = []
         for i, article in enumerate(articles):
             try:
-                result = self.process_article(article.get("title", ""), article.get("content", ""))
+                result = self.process_article(article)
             except Exception:
                 logger.exception("Failed to process article %d — skipping", i)
                 result = {
@@ -64,6 +64,41 @@ class SentimentPipeline:
                 }
             results.append(result)
         return results
+
+    def process_ticker_articles(
+        self,
+        ticker_articles: dict[str, list[Article]],
+    ) -> pd.DataFrame:
+        """Process articles grouped by ticker and return a daily-aggregated DataFrame.
+
+        Parameters
+        ----------
+        ticker_articles:
+            Mapping of ``{ticker: [Article, ...]}``.
+
+        Returns
+        -------
+        DataFrame with columns: ticker, date, sentiment_score, n_articles, embedding
+        """
+        rows: list[dict] = []
+        for ticker, articles in ticker_articles.items():
+            results = self.process_batch(articles)
+            for article, result in zip(articles, results):
+                rows.append(
+                    {
+                        "ticker": ticker,
+                        "date": article["publish_date"].isoformat()
+                        if not isinstance(article["publish_date"], str)
+                        else article["publish_date"],
+                        "label": result["label"],
+                        "embedding": result["embedding"],
+                    }
+                )
+        if not rows:
+            return pd.DataFrame(
+                columns=["ticker", "date", "sentiment_score", "n_articles", "embedding"]
+            )
+        return aggregate_daily(pd.DataFrame(rows))
 
 
 # ----------------------------------------------------------------------
