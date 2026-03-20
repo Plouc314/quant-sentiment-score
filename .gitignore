@@ -7,3 +7,4 @@ data/**/*.csv
 data/**/*.txt
 .DS_Store
 .ipynb_checkpoints
+plan.md
