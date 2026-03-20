@@ -11,12 +11,26 @@ import torch
 from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, Dataset
+from typing import TypedDict
 
 from .technical import TechnicalFactors
 
 logger = logging.getLogger(__name__)
 
 EMBEDDING_DIM = 768
+
+
+class FusedDataset(TypedDict):
+    """Output of :func:`build_dataset`."""
+
+    X_tech: np.ndarray
+    """``(N, window, 16)`` technical factor windows."""
+    X_sentiment: np.ndarray
+    """``(N, window, 768)`` sentiment embedding windows."""
+    y: np.ndarray
+    """``(N,)`` binary labels."""
+    dates: np.ndarray
+    """``(N,)`` date of last day in each window."""
 
 
 class FusedStockDataset(Dataset):
@@ -89,7 +103,7 @@ def build_dataset(
     sentiment_df: pd.DataFrame | None = None,
     ticker: str = "",
     window: int = 20,
-) -> dict:
+) -> FusedDataset:
     """Full pipeline: OHLCV → factors + targets + aligned sentiment → sliding windows.
 
     Parameters
@@ -146,7 +160,7 @@ def build_dataset(
 
 
 def make_loaders(
-    dataset: dict,
+    dataset: FusedDataset,
     test_frac: float = 0.2,
     val_frac: float = 0.1,
     batch_size: int = 32,
