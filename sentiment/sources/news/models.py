@@ -9,6 +9,7 @@ class Story(TypedDict):
     publish_date: date
     source_name: str
     language: str
+    tickers: list[str]
 
 
 class Article(TypedDict):
@@ -19,3 +20,4 @@ class Article(TypedDict):
     publish_date: date
     source_name: str
     language: str
+    tickers: list[str]
