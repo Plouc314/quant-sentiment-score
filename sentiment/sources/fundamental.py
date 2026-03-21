@@ -23,10 +23,25 @@ import time
 from datetime import date
 from pathlib import Path
 
+from typing import TypedDict
+
 import pandas as pd
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
+
+
+class Fundamentals(TypedDict):
+    pe: float
+    forward_pe: float
+    pb: float
+    ps: float
+    roe: float
+    op_margin: float
+    profit_margin: float
+    de: float
+    beta: float
+
 
 # yfinance info key → canonical column name
 _YFINANCE_FIELDS: dict[str, str] = {
@@ -60,7 +75,7 @@ class FundamentalSource:
     def __init__(self, request_delay: float = 1.5) -> None:
         self._delay = request_delay
 
-    def fetch(self, symbol: str) -> dict[str, float]:
+    def fetch(self, symbol: str) -> Fundamentals:
         """Return a snapshot of fundamental metrics for *symbol*.
 
         Keys are the names in :data:`FUNDAMENTAL_COLS`.
@@ -76,14 +91,14 @@ class FundamentalSource:
         if n_missing:
             logger.debug("%s: %d/%d fundamental fields missing", symbol, n_missing, len(result))
 
-        return result
+        return result  # type: ignore[return-value]
 
-    def fetch_many(self, symbols: list[str]) -> dict[str, dict[str, float]]:
+    def fetch_many(self, symbols: list[str]) -> dict[str, Fundamentals]:
         """Fetch fundamentals for multiple symbols with per-request delay.
 
-        Returns a mapping of ``{symbol: {col: value}}``.
+        Returns a mapping of ``{symbol: Fundamentals}``.
         """
-        results: dict[str, dict[str, float]] = {}
+        results: dict[str, Fundamentals] = {}
         for i, symbol in enumerate(symbols):
             logger.info("fetching fundamentals for %s (%d/%d)", symbol, i + 1, len(symbols))
             results[symbol] = self.fetch(symbol)
@@ -118,7 +133,7 @@ class FundamentalCache:
             data_dir = Path(__file__).parents[2] / "data" / "fundamentals"
         self._data_dir = data_dir
 
-    def store(self, symbol: str, snapshot_date: date, data: dict[str, float]) -> None:
+    def store(self, symbol: str, snapshot_date: date, data: Fundamentals) -> None:
         """Append (or update) a snapshot row for *symbol* on *snapshot_date*.
 
         Creates the CSV and parent directories on first call.
