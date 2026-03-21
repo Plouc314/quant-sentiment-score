@@ -20,9 +20,13 @@ class SentimentPipeline:
       - 768-dim mean-pooled embedding (last hidden state, all non-padding tokens)
     """
 
-    def __init__(self, device: str = "cpu") -> None:
+    def __init__(
+        self,
+        device: str = "cpu",
+        encoder_model: str = "ProsusAI/finbert",
+    ) -> None:
         self.summarizer = Summarizer(device)
-        self.encoder = SentimentEncoder(device)
+        self.encoder = SentimentEncoder(device, encoder_model)
 
     def process_article(self, article: Article) -> dict:
         """Process a single article through the full pipeline.

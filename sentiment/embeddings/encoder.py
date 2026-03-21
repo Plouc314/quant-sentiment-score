@@ -14,11 +14,15 @@ _FINBERT_MAX_LENGTH = 512
 class SentimentEncoder:
     """FinBERT sentiment encoder — produces a binary label and 768-dim embedding."""
 
-    def __init__(self, device: str = "cpu") -> None:
+    def __init__(
+        self,
+        device: str = "cpu",
+        model_name_or_path: str = "ProsusAI/finbert",
+    ) -> None:
         self.device = torch.device(device)
-        self._tok = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+        self._tok = AutoTokenizer.from_pretrained(model_name_or_path)
         self._model = AutoModelForSequenceClassification.from_pretrained(
-            "ProsusAI/finbert", output_hidden_states=True
+            model_name_or_path, output_hidden_states=True
         )
         self._model.eval().to(self.device)
 

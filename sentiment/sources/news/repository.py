@@ -79,6 +79,23 @@ class ArticleRepository:
             (existing if story["url"] in known_urls else new).append(story)
         return new, existing
 
+    def read_month_index(self, year: int, month: int) -> pd.DataFrame:
+        """Return index-only metadata for the given month (no article text).
+
+        Cheaper than :meth:`read_month` when text is not needed — pyarrow skips
+        the text column entirely at the storage layer.
+
+        Returns an empty DataFrame if no data exists for that month.
+
+        Columns: id, url, title, publish_date, source_name, language, tickers
+        """
+        path = self._data_dir / f"{year}-{month:02d}.parquet"
+        if not path.exists():
+            return pd.DataFrame(columns=_INDEX_FIELDS)
+        df = pd.read_parquet(path, columns=_INDEX_FIELDS)
+        df["publish_date"] = pd.to_datetime(df["publish_date"]).dt.date
+        return df
+
     def read_month(self, year: int, month: int) -> pd.DataFrame:
         """Return all articles for the given month as a DataFrame.
 
