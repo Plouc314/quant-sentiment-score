@@ -79,6 +79,18 @@ class ArticleRepository:
             (existing if story["url"] in known_urls else new).append(story)
         return new, existing
 
+    def read_month_index(self, year: int, month: int) -> pd.DataFrame:
+        """Return index-only metadata for the given month (no article text).
+
+        Returns an empty DataFrame if no data exists for that month.
+
+        Columns: id, url, title, publish_date, source_name, language, tickers
+        """
+        prefix = f"{year}-{month:02d}"
+        df = self._index_df[self._index_df["publish_date"].astype(str).str.startswith(prefix)].copy()
+        df["publish_date"] = pd.to_datetime(df["publish_date"]).dt.date
+        return df.reset_index(drop=True)
+
     def read_month(self, year: int, month: int) -> pd.DataFrame:
         """Return all articles for the given month as a DataFrame.
 

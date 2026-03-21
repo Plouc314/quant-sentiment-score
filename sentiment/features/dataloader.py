@@ -1,5 +1,5 @@
 
-"""Build fused technical + sentiment datasets for stock prediction."""
+"""Build fused technical + sentiment + fundamental datasets for stock prediction."""
 
 from __future__ import annotations
 
@@ -27,6 +27,9 @@ class FusedDataset(TypedDict):
     """``(N, window, 16)`` technical factor windows."""
     X_sentiment: np.ndarray
     """``(N, window, 768)`` sentiment embedding windows."""
+    X_fundamental: np.ndarray
+    """``(N, n_fund)`` fundamental snapshots at each window end date.
+    Shape is ``(N, 0)`` when no fundamental data is provided."""
     y: np.ndarray
     """``(N,)`` binary labels."""
     dates: np.ndarray
@@ -34,23 +37,27 @@ class FusedDataset(TypedDict):
 
 
 class FusedStockDataset(Dataset):
-    """PyTorch Dataset for (tech_factors, sentiment_embedding, target) triplets."""
+    """PyTorch Dataset for (tech, sentiment, fundamental, target) tuples."""
 
     def __init__(
         self,
         X_tech: np.ndarray,
         X_sentiment: np.ndarray,
+        X_fundamental: np.ndarray,
         y: np.ndarray,
     ) -> None:
         self.X_tech = torch.tensor(X_tech, dtype=torch.float32)
         self.X_sentiment = torch.tensor(X_sentiment, dtype=torch.float32)
+        self.X_fundamental = torch.tensor(X_fundamental, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.float32)
 
     def __len__(self) -> int:
         return len(self.X_tech)
 
-    def __getitem__(self, i: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        return self.X_tech[i], self.X_sentiment[i], self.y[i]
+    def __getitem__(
+        self, i: int
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        return self.X_tech[i], self.X_sentiment[i], self.X_fundamental[i], self.y[i]
 
 
 def compute_targets(close: pd.Series) -> pd.Series:
@@ -97,14 +104,56 @@ def align_sentiment(
     return result
 
 
+def align_fundamentals(
+    win_dates: np.ndarray,
+    fund_df: pd.DataFrame | None,
+) -> np.ndarray:
+    """Build ``(N, n_fund)`` array of fundamental snapshots aligned with window end dates.
+
+    Fundamental data is forward-filled: for each window end date the most recent
+    snapshot on or before that date is used.  Dates that precede all snapshots
+    (i.e. no prior data exists) are filled with 0 after forward-filling.
+
+    Parameters
+    ----------
+    win_dates:
+        Array of window end dates (``numpy.datetime64``), length N.
+    fund_df:
+        DataFrame returned by ``FundamentalCache.load()`` — DatetimeIndex,
+        columns are the fundamental metric names.  ``None`` → returns empty
+        array of shape ``(N, 0)``.
+
+    Returns
+    -------
+    ``(N, n_fund)`` float32 array.  Returns ``(N, 0)`` when *fund_df* is None.
+    """
+    if fund_df is None or fund_df.empty:
+        return np.zeros((len(win_dates), 0), dtype=np.float32)
+
+    n_fund = fund_df.shape[1]
+    dates_idx = pd.DatetimeIndex(win_dates)
+
+    # Reindex with forward-fill: for each query date, use the last known snapshot
+    reindexed = fund_df.reindex(dates_idx.union(fund_df.index)).sort_index()
+    reindexed = reindexed.ffill().reindex(dates_idx)
+
+    # Any remaining NaN (dates before first snapshot, or missing metrics) → 0
+    n_missing = int(reindexed.isna().sum().sum())
+    if n_missing:
+        logger.debug("align_fundamentals: %d NaN values filled with 0", n_missing)
+
+    return reindexed.fillna(0.0).values.astype(np.float32)
+
+
 def build_dataset(
     df: pd.DataFrame,
     technical: TechnicalFactors,
     sentiment_df: pd.DataFrame | None = None,
     ticker: str = "",
     window: int = 20,
+    fundamental_df: pd.DataFrame | None = None,
 ) -> FusedDataset:
-    """Full pipeline: OHLCV → factors + targets + aligned sentiment → sliding windows.
+    """Full pipeline: OHLCV → factors + targets + aligned sentiment/fundamentals → windows.
 
     Parameters
     ----------
@@ -118,15 +167,21 @@ def build_dataset(
         Stock ticker symbol (used to filter *sentiment_df*).
     window:
         Sliding window size in trading days.
+    fundamental_df:
+        Output of ``FundamentalCache.load(ticker)`` — DatetimeIndex with
+        fundamental metric columns — or ``None`` to omit fundamentals.
+        When provided, each window uses the most recent snapshot on or before
+        the window end date (forward-filled).
 
     Returns
     -------
     Dict with keys:
 
-    - ``X_tech``      — ``(N, window, 16)`` technical factor windows
-    - ``X_sentiment`` — ``(N, window, 768)`` sentiment embedding windows
-    - ``y``           — ``(N,)`` binary labels
-    - ``dates``       — ``(N,)`` date of last day in each window
+    - ``X_tech``        — ``(N, window, 16)`` technical factor windows
+    - ``X_sentiment``   — ``(N, window, 768)`` sentiment embedding windows
+    - ``X_fundamental`` — ``(N, n_fund)`` fundamental snapshots; ``(N, 0)`` if omitted
+    - ``y``             — ``(N,)`` binary labels
+    - ``dates``         — ``(N,)`` date of last day in each window
     """
     close = df["close"]
 
@@ -147,16 +202,26 @@ def build_dataset(
     targets_arr = targets[valid].values.astype(np.float32)
     dates = factors_df.index[valid]
 
-    # Build sliding windows
+    # Build sliding windows over tech + sentiment
     X_tech, X_sent, y, win_dates = _build_windows(
         factors_arr, embeddings_arr, targets_arr, dates, window
     )
 
+    # Align fundamentals to window end dates (one snapshot per window, no time dim)
+    X_fund = align_fundamentals(win_dates, fundamental_df)
+
+    n_fund = X_fund.shape[1]
     logger.info(
-        "Built dataset: %d windows, %d factors, window=%d",
-        len(y), factors_arr.shape[1], window,
+        "Built dataset: %d windows, %d tech factors, %d fundamental factors, window=%d",
+        len(y), factors_arr.shape[1], n_fund, window,
     )
-    return {"X_tech": X_tech, "X_sentiment": X_sent, "y": y, "dates": win_dates}
+    return {
+        "X_tech": X_tech,
+        "X_sentiment": X_sent,
+        "X_fundamental": X_fund,
+        "y": y,
+        "dates": win_dates,
+    }
 
 
 def make_loaders(
@@ -164,8 +229,11 @@ def make_loaders(
     test_frac: float = 0.2,
     val_frac: float = 0.1,
     batch_size: int = 32,
-) -> tuple[DataLoader, DataLoader, DataLoader, StandardScaler]:
-    """Split chronologically, normalize technical factors, create DataLoaders.
+) -> tuple[DataLoader, DataLoader, DataLoader, StandardScaler, StandardScaler | None]:
+    """Split chronologically, normalize features, create DataLoaders.
+
+    Both technical factors and fundamental factors are normalized with separate
+    ``StandardScaler`` instances fitted on training data only.
 
     Parameters
     ----------
@@ -180,9 +248,10 @@ def make_loaders(
 
     Returns
     -------
-    ``(train_loader, val_loader, test_loader, scaler)``
+    ``(train_loader, val_loader, test_loader, tech_scaler, fund_scaler)``
 
-    The scaler is fitted on training data only and applied to all splits.
+    ``fund_scaler`` is ``None`` when the dataset has no fundamental features.
+    Both scalers are fitted on training data only and applied to all splits.
     """
     N = len(dataset["y"])
     test_start = int(N * (1 - test_frac))
@@ -196,25 +265,38 @@ def make_loaders(
 
     # Fit StandardScaler on training technical factors only
     X_train_tech = dataset["X_tech"][splits["train"]]
-    scaler = StandardScaler()
+    tech_scaler = StandardScaler()
     n_samples, win, n_feat = X_train_tech.shape
-    scaler.fit(X_train_tech.reshape(-1, n_feat))
+    tech_scaler.fit(X_train_tech.reshape(-1, n_feat))
+
+    # Fit StandardScaler on training fundamental factors (if present)
+    X_fund_all = dataset["X_fundamental"]
+    n_fund = X_fund_all.shape[1]
+    fund_scaler: StandardScaler | None = None
+    if n_fund > 0:
+        fund_scaler = StandardScaler()
+        fund_scaler.fit(X_fund_all[splits["train"]])
 
     loaders = {}
     for name, sl in splits.items():
         X_tech = dataset["X_tech"][sl].copy()
         X_sent = dataset["X_sentiment"][sl]
+        X_fund = X_fund_all[sl].copy()
         y = dataset["y"][sl]
 
-        # Normalize technical factors using training scaler
+        # Normalize technical factors
         n, w, f = X_tech.shape
         X_tech = (
-            scaler.transform(X_tech.reshape(-1, f))
+            tech_scaler.transform(X_tech.reshape(-1, f))
             .reshape(n, w, f)
             .astype(np.float32)
         )
 
-        ds = FusedStockDataset(X_tech, X_sent, y)
+        # Normalize fundamental factors
+        if fund_scaler is not None:
+            X_fund = fund_scaler.transform(X_fund).astype(np.float32)
+
+        ds = FusedStockDataset(X_tech, X_sent, X_fund, y)
         loaders[name] = DataLoader(ds, batch_size=batch_size, shuffle=(name == "train"))
 
     logger.info(
@@ -223,7 +305,7 @@ def make_loaders(
         test_start - val_start,
         N - test_start,
     )
-    return loaders["train"], loaders["val"], loaders["test"], scaler
+    return loaders["train"], loaders["val"], loaders["test"], tech_scaler, fund_scaler
 
 
 # ------------------------------------------------------------------
