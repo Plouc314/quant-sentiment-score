@@ -1,7 +1,7 @@
 """Fundamental factor source and cache.
 
 ``FundamentalSource``  — thin wrapper around ``yfinance.Ticker.info``.
-``FundamentalCache``   — persists daily snapshots as one CSV per symbol.
+``FundamentalCache``   — persists latest snapshot for each symbol in a single CSV.
 
 Typical usage::
 
@@ -10,17 +10,15 @@ Typical usage::
 
     for symbol in symbols:
         data = source.fetch(symbol)
-        cache.store(symbol, date.today(), data)
+        cache.store(symbol, data)
 
-    # Later, load for alignment with market data:
-    df = cache.load("AAPL")   # DatetimeIndex, columns = FUNDAMENTAL_COLS
+    fund = cache.load("AAPL")   # Fundamentals TypedDict or None
 """
 
 from __future__ import annotations
 
 import logging
 import time
-from datetime import date
 from pathlib import Path
 
 from typing import TypedDict
@@ -107,63 +105,62 @@ class FundamentalSource:
         return results
 
 
+_CSV_COLS = ["symbol"] + FUNDAMENTAL_COLS
+
+
 class FundamentalCache:
-    """Persist fundamental snapshots as one CSV per symbol.
+    """Persist the latest fundamental snapshot for each symbol in a single CSV.
 
     Layout::
 
-        <data_dir>/
-            AAPL.csv
-            MSFT.csv
-            ...
+        <data_dir>/fundamentals.csv   # columns: symbol + FUNDAMENTAL_COLS
 
-    Each CSV has columns: ``date`` + all :data:`FUNDAMENTAL_COLS`.
-    One row per date when data was fetched; if data for the same date is stored
-    twice the newer call wins.
+    Storing a symbol twice overwrites the previous record.
 
     Parameters
     ----------
     data_dir:
-        Root directory for cached CSVs.  Defaults to
+        Directory containing ``fundamentals.csv``.  Defaults to
         ``<project_root>/data/fundamentals/``.
     """
 
     def __init__(self, data_dir: Path | None = None) -> None:
         if data_dir is None:
             data_dir = Path(__file__).parents[2] / "data" / "fundamentals"
-        self._data_dir = data_dir
+        self._path = data_dir / "fundamentals.csv"
 
-    def store(self, symbol: str, snapshot_date: date, data: Fundamentals) -> None:
-        """Append (or update) a snapshot row for *symbol* on *snapshot_date*.
+    def store(self, symbol: str, data: Fundamentals) -> None:
+        """Upsert the snapshot for *symbol*, creating the CSV if needed."""
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        row = pd.DataFrame([{"symbol": symbol, **data}])
 
-        Creates the CSV and parent directories on first call.
-        """
-        self._data_dir.mkdir(parents=True, exist_ok=True)
-        path = self._data_dir / f"{symbol}.csv"
-
-        date_str = snapshot_date.isoformat()
-        row = pd.DataFrame([{"date": date_str, **data}])
-
-        if path.exists():
-            existing = pd.read_csv(path)
-            existing = existing[existing["date"] != date_str]
+        if self._path.exists():
+            existing = pd.read_csv(self._path)
+            existing = existing[existing["symbol"] != symbol]
             combined = pd.concat([existing, row], ignore_index=True)
         else:
             combined = row
 
-        combined.to_csv(path, index=False)
-        logger.debug("stored fundamentals for %s on %s", symbol, date_str)
+        combined.to_csv(self._path, index=False)
+        logger.debug("stored fundamentals for %s", symbol)
 
-    def load(self, symbol: str) -> pd.DataFrame | None:
-        """Load all historical fundamental snapshots for *symbol*.
-
-        Returns a DataFrame with a ``DatetimeIndex`` sorted ascending and
-        columns matching :data:`FUNDAMENTAL_COLS`, or ``None`` if no data
-        exists for *symbol*.
-        """
-        path = self._data_dir / f"{symbol}.csv"
-        if not path.exists():
+    def load(self, symbol: str) -> Fundamentals | None:
+        """Return the cached snapshot for *symbol*, or ``None`` if not found."""
+        if not self._path.exists():
             return None
-        df = pd.read_csv(path, parse_dates=["date"])
-        df = df.set_index("date").sort_index()
-        return df
+        df = pd.read_csv(self._path)
+        rows = df[df["symbol"] == symbol]
+        if rows.empty:
+            return None
+        return rows.iloc[0][FUNDAMENTAL_COLS].to_dict()  # type: ignore[return-value]
+
+    def load_all(self) -> pd.DataFrame:
+        """Return all cached snapshots as a DataFrame indexed by symbol.
+
+        Returns an empty DataFrame if the cache does not exist yet.
+
+        Columns: :data:`FUNDAMENTAL_COLS`
+        """
+        if not self._path.exists():
+            return pd.DataFrame(columns=_CSV_COLS).set_index("symbol")
+        return pd.read_csv(self._path).set_index("symbol")
