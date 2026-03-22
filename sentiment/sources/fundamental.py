@@ -1,7 +1,7 @@
 """Fundamental factor source and cache.
 
 ``FundamentalSource``  — thin wrapper around ``yfinance.Ticker.info``.
-``FundamentalCache``   — persists latest snapshot for each symbol in a single CSV.
+``FundamentalCache``   — persists dated snapshots for each symbol in a single CSV.
 
 Typical usage::
 
@@ -10,9 +10,10 @@ Typical usage::
 
     for symbol in symbols:
         data = source.fetch(symbol)
-        cache.store(symbol, data)
+        cache.store(symbol, data)          # appends a dated row
 
-    fund = cache.load("AAPL")   # Fundamentals TypedDict or None
+    fund_df = cache.load_df("AAPL")       # DatetimeIndex'd DataFrame → build_dataset
+    latest  = cache.load("AAPL")          # Fundamentals dict — latest snapshot only
 """
 
 from __future__ import annotations
@@ -55,6 +56,9 @@ _YFINANCE_FIELDS: dict[str, str] = {
 }
 
 FUNDAMENTAL_COLS: list[str] = list(_YFINANCE_FIELDS.values())
+
+# CSV column order: date first, then symbol, then metrics
+_CSV_COLS = ["date", "symbol"] + FUNDAMENTAL_COLS
 
 
 class FundamentalSource:
@@ -105,23 +109,23 @@ class FundamentalSource:
         return results
 
 
-_CSV_COLS = ["symbol"] + FUNDAMENTAL_COLS
-
-
 class FundamentalCache:
-    """Persist the latest fundamental snapshot for each symbol in a single CSV.
+    """Persist dated fundamental snapshots for each symbol in a single CSV.
+
+    Each call to :meth:`store` **appends** a new row with today's date, so the
+    file grows over time and :meth:`load_df` can return a time-indexed DataFrame
+    suitable for forward-filling inside ``build_dataset``.
 
     Layout::
 
-        <data_dir>/fundamentals.csv   # columns: symbol + FUNDAMENTAL_COLS
-
-    Storing a symbol twice overwrites the previous record.
+        <data_dir>/fundamentals.csv   # columns: date, symbol, <FUNDAMENTAL_COLS>
 
     Parameters
     ----------
     data_dir:
         Directory containing ``fundamentals.csv``.  Defaults to
         ``<project_root>/data/fundamentals/``.
+
     """
 
     def __init__(self, data_dir: Path | None = None) -> None:
@@ -130,37 +134,63 @@ class FundamentalCache:
         self._path = data_dir / "fundamentals.csv"
 
     def store(self, symbol: str, data: Fundamentals) -> None:
-        """Upsert the snapshot for *symbol*, creating the CSV if needed."""
+        """Append a dated snapshot for *symbol*, creating the CSV if needed."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        row = pd.DataFrame([{"symbol": symbol, **data}])
+        today = pd.Timestamp.today().normalize().date().isoformat()
+        row = pd.DataFrame([{"date": today, "symbol": symbol, **data}])
 
         if self._path.exists():
             existing = pd.read_csv(self._path)
-            existing = existing[existing["symbol"] != symbol]
-            combined = pd.concat([existing, row], ignore_index=True)
+            existing = pd.concat([existing, row], ignore_index=True)
+            existing = existing.drop_duplicates(subset=["date", "symbol"], keep="last")
         else:
-            combined = row
+            existing = row
 
-        combined.to_csv(self._path, index=False)
-        logger.debug("stored fundamentals for %s", symbol)
+        existing.to_csv(self._path, index=False)
+        logger.debug("stored fundamentals for %s (%s)", symbol, today)
 
-    def load(self, symbol: str) -> Fundamentals | None:
-        """Return the cached snapshot for *symbol*, or ``None`` if not found."""
-        if not self._path.exists():
-            return None
-        df = pd.read_csv(self._path)
-        rows = df[df["symbol"] == symbol]
-        if rows.empty:
-            return None
-        return rows.iloc[0][FUNDAMENTAL_COLS].to_dict()  # type: ignore[return-value]
+    def load_df(self, symbol: str) -> pd.DataFrame | None:
+        """Return all snapshots for *symbol* as a DatetimeIndex'd DataFrame.
 
-    def load_all(self) -> pd.DataFrame:
-        """Return all cached snapshots as a DataFrame indexed by symbol.
+        Returns ``None`` if no data exists for this symbol.
 
-        Returns an empty DataFrame if the cache does not exist yet.
+        This is the correct input for ``build_dataset(fundamental_df=...)``:
+        ``align_fundamentals`` will forward-fill the most recent snapshot onto
+        each window end date, so quarterly-updated fundamentals naturally carry
+        forward through daily windows.
 
-        Columns: :data:`FUNDAMENTAL_COLS`
+        Columns: :data:`FUNDAMENTAL_COLS`.
         """
         if not self._path.exists():
-            return pd.DataFrame(columns=_CSV_COLS).set_index("symbol")
-        return pd.read_csv(self._path).set_index("symbol")
+            return None
+        df = pd.read_csv(self._path, parse_dates=["date"])
+        rows = df[df["symbol"] == symbol][["date"] + FUNDAMENTAL_COLS].copy()
+        if rows.empty:
+            return None
+        return rows.set_index("date").sort_index()
+
+    def load(self, symbol: str) -> Fundamentals | None:
+        """Return the most recent cached snapshot for *symbol*, or ``None``.
+
+        For time-series use (passing to ``build_dataset``), use
+        :meth:`load_df` instead.
+        """
+        df = self.load_df(symbol)
+        if df is None or df.empty:
+            return None
+        return df.iloc[-1].to_dict()  # type: ignore[return-value]
+
+    def load_all(self) -> pd.DataFrame:
+        """Return the most recent snapshot for each symbol as a DataFrame indexed by symbol.
+
+        Returns an empty DataFrame if the cache does not exist yet.
+        Columns: :data:`FUNDAMENTAL_COLS`.
+        """
+        if not self._path.exists():
+            return pd.DataFrame(columns=FUNDAMENTAL_COLS)
+        df = pd.read_csv(self._path, parse_dates=["date"])
+        return (
+            df.sort_values("date")
+            .groupby("symbol")[FUNDAMENTAL_COLS]
+            .last()
+        )

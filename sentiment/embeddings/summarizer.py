@@ -15,16 +15,22 @@ _FINBERT_MAX_LENGTH = 512
 
 
 class Summarizer:
-    """BART-CNN summarizer — compresses long article text for downstream encoding."""
+    """Seq2seq summarizer — compresses long article text for downstream encoding.
 
-    def __init__(self, device: str = "cpu") -> None:
+    Defaults to ``facebook/bart-large-cnn``; pass any HuggingFace seq2seq model
+    name (e.g. ``human-centered-summarization/financial-summarization-pegasus``)
+    to swap the backbone without changing any other code.
+    """
+
+    def __init__(
+        self,
+        device: str = "cpu",
+        model_name: str = "facebook/bart-large-cnn",
+    ) -> None:
         self.device = torch.device(device)
-        self._tok = AutoTokenizer.from_pretrained("facebook/bart-large-cnn")
-        self._model = AutoModelForSeq2SeqLM.from_pretrained("facebook/bart-large-cnn")
+        self._tok = AutoTokenizer.from_pretrained(model_name)
+        self._model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
         self._model.eval().to(self.device)
-
-        # keep a FinBERT tokenizer purely for the short-content check
-        self._fin_tok = AutoTokenizer.from_pretrained("ProsusAI/finbert")
 
     def summarize(self, content: str) -> str:
         """Compress article content via BART-CNN.
@@ -35,9 +41,11 @@ class Summarizer:
         if not content or not content.strip():
             return ""
 
-        # Short-content bypass
-        fin_tokens = self._fin_tok(content, truncation=False)
-        if len(fin_tokens["input_ids"]) <= _FINBERT_MAX_LENGTH:
+        # Short-content bypass: use BART tokenizer as a proxy for FinBERT length.
+        # BART and FinBERT tokenizers produce similar token counts for financial
+        # prose, so this avoids loading a second model just for the length check.
+        bart_tokens = self._tok(content, truncation=False)
+        if len(bart_tokens["input_ids"]) <= _FINBERT_MAX_LENGTH:
             return content
 
         inputs = self._tok(

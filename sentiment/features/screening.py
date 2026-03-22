@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import TypedDict
 
+import numpy as np
 import pandas as pd
 
 from ..sources.news.repository import ArticleRepository
@@ -21,6 +22,17 @@ class CoverageStats(TypedDict):
     months_tracked: int
     avg_articles_per_month: float
     passes: bool
+
+
+def momentum_slope(closes: pd.Series, window: int = 20) -> float:
+    """Linear regression slope of the last `window` closing prices.
+
+    Positive slope → uptrend (pass); negative → downtrend (filter out).
+    Uses normalised x-axis (0..window-1) so the slope is in price-units-per-day.
+    """
+    prices = closes.iloc[-window:].values
+    slope: float = np.polyfit(np.arange(window), prices, 1)[0]
+    return slope
 
 
 def screen_by_coverage(
