@@ -126,11 +126,6 @@ class FundamentalCache:
         Directory containing ``fundamentals.csv``.  Defaults to
         ``<project_root>/data/fundamentals/``.
 
-    Migration note
-    --------------
-    If an existing ``fundamentals.csv`` was written by an older version of this
-    class (no ``date`` column), :meth:`store` will detect it and backfill
-    ``date`` with today's date for all existing rows before appending.
     """
 
     def __init__(self, data_dir: Path | None = None) -> None:
@@ -146,13 +141,6 @@ class FundamentalCache:
 
         if self._path.exists():
             existing = pd.read_csv(self._path)
-            if "date" not in existing.columns:
-                raise RuntimeError(
-                    f"{self._path} has no 'date' column (legacy format). "
-                    "Add a 'date' column manually with the correct snapshot dates "
-                    "before calling store() — automatic backdating would corrupt "
-                    "the forward-fill logic in align_fundamentals."
-                )
             existing = pd.concat([existing, row], ignore_index=True)
             existing = existing.drop_duplicates(subset=["date", "symbol"], keep="last")
         else:
