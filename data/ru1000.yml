@@ -1,1000 +1,993 @@
 companies:
-  - AMD:XNAS
-  - FRPT:XNAS
-  - MTCH:XNAS
-  - CIVI:XNYS
-  - GNTX:XNAS
-  - RBA:XNYS
-  - FRMI:XNAS
-  - PFE:XNYS
-  - FAST:XNAS
-  - GEV:XNYS
-  - VRTX:XNAS
-  - BWXT:XNYS
-  - BJ:XNYS
-  - IR:XNYS
-  - JBL:XNYS
-  - C:XNYS
-  - FCN:XNYS
-  - GIS:XNYS
-  - KDP:XNAS
-  - MSFT:XNAS
-  - CPRT:XNAS
-  - SPR:XNYS
-  - LKQ:XNAS
-  - NEE:XNYS
-  - AFG:XNYS
-  - MAN:XNYS
-  - WEN:XNAS
-  - KEY:XNYS
-  - YUM:XNYS
-  - CRCL:XNYS
-  - LNC:XNYS
-  - ZM:XNAS
-  - TAP:XNYS
-  - TOL:XNYS
-  - AJG:XNYS
-  - PAYC:XNYS
-  - CASY:XNAS
-  - KVUE:XNYS
-  - GPC:XNYS
-  - VLTO:XNYS
-  - DE:XNYS
-  - WU:XNYS
-  - TMO:XNYS
-  - ACGL:XNAS
-  - AFRM:XNAS
-  - MSI:XNYS
-  - NSC:XNYS
-  - SPOT:XNYS
-  - SOFI:XNAS
-  - KBR:XNYS
-  - HLNE:XNAS
-  - DRS:XNAS
-  - VST:XNYS
-  - MUSA:XNYS
-  - CLF:XNYS
-  - GMED:XNYS
-  - S:XNYS
-  - AVGO:XNAS
-  - EXP:XNYS
-  - CBOE:BATS
-  - GAP:XNYS
-  - AN:XNYS
-  - LBRDA:XNAS
-  - IAC:XNAS
-  - G:XNYS
-  - JCI:XNYS
-  - FBIN:XNYS
-  - SBUX:XNAS
-  - INGM:XNYS
-  - ELF:XNYS
-  - COTY:XNYS
-  - SF:XNYS
-  - INTC:XNAS
-  - ILMN:XNAS
-  - REGN:XNAS
-  - FYBR:XNAS
-  - MIDD:XNAS
-  - BROS:XNYS
-  - A:XNYS
-  - WTRG:XNYS
-  - SEB:XASE
-  - AIZ:XNYS
-  - TDG:XNYS
-  - JNJ:XNYS
-  - U:XNYS
-  - NET:XNYS
-  - CAR:XNAS
-  - R:XNYS
-  - HIW:XNYS
-  - BA:XNYS
-  - OXY:XNYS
-  - PTC:XNAS
-  - GFS:XNAS
-  - HSIC:XNAS
-  - SAIC:XNAS
-  - OHI:XNYS
-  - PRMB:XNYS
-  - LSTR:XNAS
-  - SYK:XNYS
-  - SNA:XNYS
-  - CEG:XNAS
-  - ROIV:XNAS
-  - SBAC:XNAS
-  - TXRH:XNAS
-  - DVA:XNYS
-  - MKSI:XNAS
-  - CSL:XNYS
-  - SSD:XNYS
-  - SNOW:XNYS
-  - SCCO:XNYS
-  - GOOG:XNAS
-  - MRP:XNYS
-  - FERG:XNYS
-  - STZ:XNYS
-  - HUBS:XNYS
-  - EMN:XNYS
-  - UDR:XNYS
-  - FNF:XNYS
-  - JKHY:XNAS
-  - HXL:XNYS
-  - LULU:XNAS
-  - ESTC:XNYS
-  - CRWD:XNAS
-  - GM:XNYS
-  - CMS:XNYS
-  - HOOD:XNAS
-  - BOKF:XNAS
-  - RTX:XNYS
-  - EWBC:XNAS
-  - NTRA:XNAS
-  - REYN:XNAS
-  - EL:XNYS
-  - TTEK:XNAS
-  - TFC:XNYS
-  - TXT:XNYS
-  - JBHT:XNAS
-  - FAF:XNYS
-  - JLL:XNYS
-  - WLK:XNYS
-  - ALGN:XNAS
-  - EQH:XNYS
-  - AMZN:XNAS
-  - WY:XNYS
-  - STE:XNYS
-  - AFL:XNYS
-  - PNR:XNYS
-  - WEC:XNYS
-  - RPRX:XNAS
-  - SNDK:XNAS
-  - WSO:XNYS
-  - CMI:XNYS
-  - CWEN:XNYS
-  - OZK:XNAS
-  - CBSH:XNAS
-  - EME:XNYS
-  - DG:XNYS
-  - CCL:XNYS
-  - VRSN:XNAS
-  - FWONA:XNAS
-  - IBKR:XNAS
-  - CFLT:XNAS
-  - HEI:XNYS
-  - AA:XNYS
-  - EGP:XNYS
-  - TEM:XNAS
-  - AMT:XNYS
-  - BRBR:XNYS
-  - WAT:XNYS
-  - HLT:XNYS
-  - ORI:XNYS
-  - VOYA:XNYS
-  - LSCC:XNAS
-  - CELH:XNAS
-  - KMPR:XNYS
-  - KRMN:XNYS
-  - CPAY:XNYS
-  - AU:XNYS
-  - RNG:XNYS
-  - APTV:XNYS
-  - PSX:XNYS
-  - HSY:XNYS
-  - MLM:XNYS
-  - CSGP:XNAS
-  - MSM:XNYS
-  - DIS:XNYS
-  - VLO:XNYS
-  - COLD:XNYS
-  - META:XNAS
-  - ES:XNYS
-  - ZG:XNAS
-  - D:XNYS
-  - ADI:XNAS
-  - SNDR:XNYS
-  - GLIBK:XNAS
-  - DXCM:XNAS
-  - FDS:XNYS
-  - HAL:XNYS
-  - DECK:XNYS
-  - DUOL:XNAS
-  - HPQ:XNYS
-  - HR:XNYS
-  - JPM:XNYS
-  - H:XNYS
-  - DAL:XNYS
-  - SWK:XNYS
-  - MOS:XNYS
-  - ZION:XNAS
-  - AMTM:XNYS
-  - FND:XNYS
-  - AWK:XNYS
-  - ABBV:XNYS
-  - ATI:XNYS
-  - AVTR:XNYS
-  - INCY:XNAS
-  - CAT:XNYS
-  - RH:XNYS
-  - PHM:XNYS
-  - EQT:XNYS
-  - NCNO:XNAS
-  - WBS:XNYS
-  - AS:XNYS
-  - EXC:XNAS
-  - CPB:XNAS
-  - MCD:XNYS
-  - KIM:XNYS
-  - HON:XNAS
-  - AMH:XNYS
-  - ANET:XNYS
-  - JHG:XNYS
-  - EXEL:XNAS
-  - ULTA:XNAS
-  - COR:XNYS
-  - FTI:XNYS
-  - NOW:XNYS
-  - INSM:XNAS
-  - LHX:XNYS
-  - TRMB:XNAS
-  - AR:XNYS
-  - CLX:XNYS
-  - AVT:XNAS
-  - RJF:XNYS
-  - DAY:XNYS
-  - OGN:XNYS
-  - COIN:XNAS
-  - WTW:XNAS
-  - ROKU:XNAS
-  - LOW:XNYS
-  - GWW:XNYS
-  - MP:XNYS
-  - RYAN:XNYS
-  - IRM:XNYS
-  - WYNN:XNAS
-  - SMCI:XNAS
-  - SRE:XNYS
-  - UPS:XNYS
-  - REXR:XNYS
-  - APA:XNAS
-  - INSP:XNYS
-  - KNSL:XNYS
-  - PGR:XNYS
-  - SSNC:XNAS
-  - NYT:XNYS
-  - ROST:XNAS
-  - DASH:XNAS
-  - EQR:XNYS
-  - FFIV:XNAS
-  - DRI:XNYS
-  - MDU:XNYS
-  - GILD:XNAS
-  - CMCSA:XNAS
-  - LYB:XNYS
-  - CRUS:XNAS
-  - SO:XNYS
-  - AMGN:XNAS
-  - MSGS:XNYS
-  - CRS:XNYS
-  - ZS:XNAS
-  - BSY:XNAS
-  - HCA:XNYS
-  - VRT:XNYS
-  - PNW:XNYS
-  - EIX:XNYS
-  - BEPC:XNYS
-  - ECG:XNYS
-  - MSCI:XNYS
-  - HHH:XNYS
-  - NOC:XNYS
-  - CTSH:XNAS
-  - INVH:XNYS
-  - MAA:XNYS
-  - CDW:XNAS
-  - SJM:XNYS
-  - CAG:XNYS
-  - CARR:XNYS
-  - IRDM:XNAS
-  - LOAR:XNYS
-  - ELAN:XNYS
-  - GS:XNYS
-  - BFAM:XNYS
-  - ONON:XNYS
-  - WMT:XNAS
-  - TKO:XNYS
-  - SEE:XNYS
-  - MPC:XNYS
-  - MDT:XNYS
-  - NSA:XNYS
-  - PH:XNYS
-  - LLY:XNYS
-  - EPAM:XNYS
-  - KLAC:XNAS
-  - NVST:XNYS
-  - LINE:XNAS
-  - W:XNYS
-  - AAPL:XNAS
-  - UNH:XNYS
-  - TEAM:XNAS
-  - BC:XNYS
-  - AXON:XNAS
-  - OTIS:XNYS
-  - FOX:XNAS
-  - SLM:XNAS
-  - AOS:XNYS
-  - WHR:XNYS
-  - PCOR:XNYS
-  - CHD:XNYS
-  - RCL:XNYS
-  - RL:XNYS
-  - OLED:XNAS
-  - GWRE:XNYS
-  - ACM:XNYS
-  - PSN:XNYS
-  - NTAP:XNAS
-  - CVNA:XNYS
-  - AM:XNYS
-  - ALLY:XNYS
-  - RS:XNYS
-  - CNXC:XNAS
-  - KD:XNYS
-  - XRAY:XNAS
-  - EBAY:XNAS
-  - FIVE:XNAS
-  - KEYS:XNYS
-  - NDSN:XNAS
-  - ICE:XNYS
-  - BEN:XNYS
-  - FTAI:XNAS
-  - TPR:XNYS
-  - VEEV:XNYS
-  - BPOP:XNAS
-  - MCK:XNYS
-  - WSM:XNYS
-  - MGM:XNYS
-  - LLYVA:XNAS
-  - PPC:XNAS
-  - GPK:XNYS
-  - BR:XNYS
-  - KMI:XNYS
-  - BIIB:XNAS
-  - IQV:XNYS
-  - JAZZ:XNAS
-  - ORCL:XNYS
-  - HOG:XNYS
-  - VKTX:XNAS
-  - NWSA:XNAS
-  - GLPI:XNAS
-  - ALLE:XNYS
-  - OMC:XNYS
-  - LDOS:XNYS
-  - VZ:XNYS
-  - BKR:XNAS
-  - AXS:XNYS
-  - AUR:XNAS
-  - OKE:XNYS
-  - PCAR:XNAS
-  - RARE:XNAS
-  - ARW:XNYS
-  - CORT:XNAS
-  - PNFP:XNYS
-  - KR:XNYS
-  - WAL:XNYS
-  - KHC:XNAS
-  - FDX:XNYS
-  - FSLR:XNAS
-  - LPLA:XNAS
-  - PNC:XNYS
-  - AGCO:XNYS
-  - NKE:XNYS
-  - SGI:XNYS
-  - MTN:XNYS
-  - FIS:XNYS
-  - VICI:XNYS
-  - GL:XNYS
-  - BAC:XNYS
-  - ETN:XNYS
-  - SARO:XNYS
-  - PLD:XNYS
-  - CNA:XNYS
-  - ESS:XNYS
-  - COST:XNAS
-  - TFSL:XNAS
-  - NU:XNYS
-  - CSX:XNAS
-  - MKTX:XNAS
-  - L:XNYS
-  - CE:XNYS
-  - RHI:XNYS
-  - FIX:XNYS
-  - CGNX:XNAS
-  - CVX:XNYS
-  - RVMD:XNAS
-  - IP:XNYS
-  - CZR:XNAS
-  - DDOG:XNAS
-  - GD:XNYS
-  - BDX:XNYS
-  - OSK:XNYS
-  - TW:XNAS
-  - DHI:XNYS
-  - BRKR:XNAS
-  - WDC:XNAS
-  - COLB:XNAS
-  - DVN:XNYS
-  - IDA:XNYS
-  - DOCS:XNYS
-  - IONS:XNAS
-  - RRX:XNYS
-  - BK:XNYS
-  - BMY:XNYS
-  - EPR:XNYS
-  - WBD:XNAS
-  - UI:XNYS
-  - HBAN:XNAS
-  - LBTYK:XNAS
-  - CNM:XNYS
-  - CHRW:XNAS
-  - ROL:XNYS
-  - AAON:XNAS
-  - TTC:XNYS
-  - IVZ:XNYS
-  - BX:XNYS
-  - DTM:XNYS
-  - OVV:XNYS
-  - FLO:XNYS
-  - GGG:XNYS
-  - AKAM:XNAS
-  - COP:XNYS
-  - BMRN:XNAS
-  - ITW:XNYS
-  - LW:XNYS
-  - SNPS:XNAS
-  - VNO:XNYS
-  - NEM:XNYS
-  - ADP:XNAS
-  - AES:XNYS
-  - RKLB:XNAS
-  - ALSN:XNYS
-  - QCOM:XNAS
-  - DHR:XNYS
-  - VFC:XNYS
-  - BSX:XNYS
-  - EXPD:XNYS
-  - MPW:XNYS
-  - RIVN:XNAS
-  - XPO:XNYS
-  - CSCO:XNAS
-  - ADM:XNYS
-  - MTDR:XNYS
-  - AVY:XNYS
-  - ONTO:XNYS
-  - MOH:XNYS
-  - EQIX:XNAS
-  - CI:XNYS
-  - NVT:XNYS
-  - CL:XNYS
-  - TXN:XNAS
-  - EHC:XNYS
-  - FANG:XNAS
-  - TECH:XNAS
-  - VSNT:XNAS
-  - CRM:XNYS
-  - SPG:XNYS
-  - SLGN:XNYS
-  - CAH:XNYS
-  - NI:XNYS
-  - PPL:XNYS
-  - BILL:XNYS
-  - BRO:XNYS
-  - AMAT:XNAS
-  - LITE:XNAS
-  - ALB:XNYS
-  - ADBE:XNAS
-  - BIRK:XNYS
-  - CF:XNYS
-  - PPG:XNYS
-  - TRV:XNYS
-  - LCID:XNAS
-  - CHH:XNYS
-  - CHRD:XNAS
-  - WCC:XNYS
-  - BXP:XNYS
-  - HST:XNAS
-  - QS:XNAS
-  - RVTY:XNYS
-  - SHW:XNYS
-  - MU:XNAS
-  - ESI:XNYS
-  - HUN:XNYS
-  - IPGP:XNAS
-  - MRNA:XNAS
-  - BRX:XNYS
-  - DOC:XNYS
-  - ARE:XNYS
-  - DLR:XNYS
-  - DLTR:XNAS
-  - RDDT:XNYS
-  - MASI:XNAS
-  - AGNC:XNAS
-  - ATR:XNYS
-  - TDC:XNYS
-  - SAIL:XNAS
-  - FE:XNYS
-  - DLB:XNYS
-  - LVS:XNYS
-  - MHK:XNYS
-  - PEP:XNAS
-  - APO:XNYS
-  - MPWR:XNAS
-  - LRCX:XNAS
-  - PRU:XNYS
-  - GRMN:XNYS
-  - EVR:XNYS
-  - SIRI:XNAS
-  - ADC:XNYS
-  - AAL:XNAS
-  - V:XNYS
-  - XOM:XNYS
-  - CW:XNYS
-  - ETSY:XNYS
-  - RBLX:XNYS
-  - EOG:XNYS
-  - BWA:XNYS
-  - EXLS:XNAS
-  - MCO:XNYS
-  - SOLV:XNYS
-  - J:XNYS
-  - TGT:XNYS
-  - ALGM:XNAS
-  - FOXA:XNAS
-  - VIK:XNYS
-  - LNG:XNYS
-  - PR:XNYS
-  - MA:XNYS
-  - NVDA:XNAS
-  - CPNG:XNYS
-  - FCX:XNYS
-  - TWLO:XNYS
-  - TT:XNYS
-  - BAM:XNYS
-  - DCI:XNYS
-  - WRB:XNYS
-  - FLUT:XNYS
-  - UAA:XNYS
-  - TSLA:XNAS
-  - VRSK:XNAS
-  - MSA:XNYS
-  - ED:XNYS
-  - TSN:XNYS
-  - RLI:XNYS
-  - TPG:XNAS
-  - AEE:XNYS
-  - CTVA:XNYS
-  - CHDN:XNAS
-  - KMB:XNAS
-  - HII:XNYS
-  - RGA:XNYS
-  - JEF:XNYS
-  - CMG:XNYS
-  - GOOGL:XNAS
-  - ROK:XNYS
-  - AMCR:XNYS
-  - SNX:XNYS
-  - NVR:XNYS
-  - ABT:XNYS
-  - XP:XNAS
-  - TROW:XNAS
-  - ACI:XNYS
-  - MAR:XNAS
-  - XYL:XNYS
-  - SAIA:XNAS
-  - PYPL:XNAS
-  - ADSK:XNAS
-  - RNR:XNYS
-  - MLI:XNYS
-  - ETR:XNYS
-  - DKS:XNYS
-  - WAB:XNYS
-  - YETI:XNYS
-  - APG:XNYS
-  - BBWI:XNYS
-  - DBX:XNAS
-  - WH:XNYS
-  - PLNT:XNYS
-  - DOX:XNAS
-  - DOW:XNYS
-  - IEX:XNYS
-  - TFX:XNYS
-  - RGEN:XNAS
-  - Z:XNAS
-  - CACC:XNAS
-  - GEN:XNAS
-  - WWD:XNAS
-  - RPM:XNYS
-  - ALK:XNYS
-  - THC:XNYS
-  - PKG:XNYS
-  - SCHW:XNYS
-  - CERT:XNAS
-  - THG:XNYS
-  - COF:XNYS
-  - SOLS:XNAS
-  - GME:XNYS
-  - WTM:XNYS
-  - DUK:XNYS
-  - AME:XNYS
-  - CUZ:XNYS
-  - SRPT:XNAS
-  - CART:XNAS
-  - AVB:XNYS
-  - KNX:XNYS
-  - LII:XNYS
-  - MRSH:XNYS
-  - XEL:XNAS
-  - FHN:XNYS
-  - NEU:XNYS
-  - AGO:XNYS
-  - HRL:XNYS
-  - WFRD:XNAS
-  - FRHC:XNAS
-  - WM:XNYS
-  - WDAY:XNAS
-  - COLM:XNAS
-  - UHAL:XNYS
-  - ASTS:XNAS
-  - IBM:XNYS
-  - XYZ:XNYS
-  - MTSI:XNAS
-  - SMG:XNYS
-  - IDXX:XNAS
-  - PM:XNYS
-  - WST:XNYS
-  - DOV:XNYS
-  - CR:XNYS
-  - FR:XNYS
-  - ZBH:XNYS
-  - ACHC:XNAS
-  - MNST:XNAS
-  - STT:XNYS
-  - PANW:XNAS
-  - DT:XNYS
-  - APLS:XNAS
-  - CRH:XNYS
-  - PEG:XNYS
-  - CCK:XNYS
-  - CAVA:XNYS
-  - UTHR:XNAS
-  - TPL:XNYS
-  - BLK:XNYS
-  - WING:XNAS
-  - MEDP:XNAS
-  - ELV:XNYS
-  - Q:XNYS
-  - CBRE:XNYS
-  - COO:XNAS
-  - DAR:XNYS
-  - ALAB:XNAS
-  - MTB:XNYS
-  - NCLH:XNYS
-  - EEFT:XNAS
-  - ZBRA:XNAS
-  - ENTG:XNAS
-  - CCI:XNYS
-  - VTR:XNYS
-  - SFD:XNAS
-  - DGX:XNYS
-  - IT:XNYS
-  - SITE:XNYS
-  - SHC:XNAS
-  - EFX:XNYS
-  - PVH:XNYS
-  - LFUS:XNAS
-  - CG:XNAS
-  - RSG:XNYS
-  - WMS:XNYS
-  - CCC:XNAS
-  - LOPE:XNAS
-  - PSTG:XNYS
-  - UWMC:XNYS
-  - URI:XNYS
-  - BLD:XNYS
-  - LH:XNYS
-  - AYI:XNYS
-  - ARES:XNYS
-  - BHF:XNAS
-  - RMD:XNYS
-  - MMM:XNYS
-  - HUM:XNYS
-  - NTRS:XNAS
-  - AZO:XNYS
-  - PENN:XNAS
-  - APPF:XNAS
-  - AWI:XNYS
-  - SON:XNYS
-  - NWS:XNAS
-  - SEIC:XNAS
-  - GEHC:XNAS
-  - NWL:XNAS
-  - RRC:XNYS
-  - LYV:XNYS
-  - PRI:XNYS
-  - HAS:XNAS
-  - PRGO:XNYS
-  - RKT:XNYS
-  - UNM:XNYS
-  - TYL:XNYS
-  - TSCO:XNAS
-  - ZTS:XNYS
-  - LAZ:XNYS
-  - CXT:XNYS
-  - VMC:XNYS
-  - FOUR:XNYS
-  - MO:XNYS
-  - GDDY:XNYS
-  - KEX:XNYS
-  - PK:XNYS
-  - WTFC:XNAS
-  - NBIX:XNAS
-  - DKNG:XNAS
-  - NFLX:XNAS
-  - CDNS:XNAS
-  - MET:XNYS
-  - LIN:XNAS
-  - DDS:XNYS
-  - ACN:XNYS
-  - SW:XNYS
-  - EXE:XNAS
-  - HUBB:XNYS
-  - EA:XNAS
-  - ORLY:XNAS
-  - DINO:XNYS
-  - OC:XNYS
-  - IFF:XNYS
-  - CHE:XNYS
-  - CHWY:XNYS
-  - CME:XNAS
-  - UNP:XNYS
-  - DTE:XNYS
-  - TKR:XNYS
-  - GPN:XNYS
-  - VNOM:XNAS
-  - WSC:XNAS
-  - BLSH:XNYS
-  - O:XNYS
-  - PB:XNYS
-  - ELS:XNYS
-  - HRB:XNYS
-  - GE:XNYS
-  - VVV:XNYS
-  - GTM:XNAS
-  - OGE:XNYS
-  - DOCU:XNAS
-  - TJX:XNYS
-  - KKR:XNYS
-  - EW:XNYS
-  - BAH:XNYS
-  - UHS:XNYS
-  - SN:XNYS
-  - HOLX:XNAS
-  - ESAB:XNYS
-  - INGR:XNYS
-  - FNB:XNYS
-  - CFR:XNYS
-  - APP:XNAS
-  - T:XNYS
-  - BG:XNYS
-  - FRT:XNYS
-  - KO:XNYS
-  - EVRG:XNAS
-  - WPC:XNYS
-  - LPX:XNYS
-  - TLN:XNAS
-  - OMF:XNYS
-  - PG:XNYS
-  - KRC:XNYS
-  - QGEN:XNYS
-  - CMA:XNYS
-  - ADT:XNYS
-  - BIO:XNYS
-  - MAT:XNAS
-  - EG:XNYS
-  - TDY:XNYS
-  - HWM:XNYS
-  - RAL:XNYS
-  - LBTYA:XNAS
-  - MKL:XNYS
-  - WEX:XNYS
-  - APD:XNYS
-  - FISV:XNAS
-  - PWR:XNYS
-  - ENPH:XNAS
-  - LAD:XNYS
-  - WMB:XNYS
-  - LAMR:XNAS
-  - VNT:XNYS
-  - SFM:XNAS
-  - LYFT:XNAS
-  - BAX:XNYS
-  - TNL:XNYS
-  - RGLD:XNAS
-  - APH:XNYS
-  - UGI:XNYS
-  - ARMK:XNYS
-  - PINS:XNYS
-  - AMG:XNYS
-  - THO:XNYS
-  - CNH:XNYS
-  - SMMT:XNAS
-  - ATO:XNYS
-  - VMI:XNYS
-  - BURL:XNYS
-  - TIGO:XNAS
-  - TRGP:XNYS
-  - FLEX:XNAS
-  - SWKS:XNAS
-  - LEN:XNYS
-  - POST:XNYS
-  - RF:XNYS
-  - CIEN:XNYS
-  - CNC:XNYS
-  - RYN:XNYS
-  - AIT:XNYS
-  - ROP:XNAS
-  - PCG:XNYS
-  - WELL:XNYS
-  - ODFL:XNAS
-  - AXTA:XNYS
-  - HPE:XNYS
-  - RBC:XNYS
-  - VTRS:XNAS
-  - NXST:XNAS
-  - CHTR:XNAS
-  - PCTY:XNAS
-  - MSTR:XNAS
-  - LBRDK:XNAS
-  - NDAQ:XNAS
-  - TER:XNAS
-  - MRVL:XNAS
-  - PAG:XNYS
-  - AL:XNYS
-  - DELL:XNYS
-  - MDB:XNAS
-  - UA:XNYS
-  - COKE:XNAS
-  - QRVO:XNAS
-  - FICO:XNYS
-  - HAYW:XNYS
-  - BLDR:XNYS
-  - ALL:XNYS
-  - FLS:XNYS
-  - ISRG:XNAS
-  - POOL:XNAS
-  - EXR:XNYS
-  - PFGC:XNYS
-  - EXPE:XNAS
-  - CROX:XNAS
-  - CINF:XNAS
-  - ST:XNYS
-  - CAI:XNAS
-  - CLVT:XNYS
-  - AEP:XNAS
-  - CLH:XNYS
-  - CB:XNYS
-  - ITT:XNYS
-  - DXC:XNYS
-  - NTNX:XNAS
-  - HALO:XNAS
-  - BKNG:XNAS
-  - PAYX:XNAS
-  - AXP:XNYS
-  - KMX:XNYS
-  - LECO:XNAS
-  - MRK:XNYS
-  - FTV:XNYS
-  - OLLI:XNAS
-  - OLN:XNYS
-  - LEA:XNYS
-  - MKC:XNYS
-  - CTRA:XNYS
-  - COHR:XNYS
-  - FWONK:XNAS
-  - ALNY:XNAS
-  - DPZ:XNAS
-  - GTLB:XNAS
-  - GXO:XNYS
-  - INTU:XNAS
-  - JHX:XNYS
-  - EMR:XNYS
-  - TTD:XNAS
-  - M:XNYS
-  - FHB:XNAS
-  - FITB:XNAS
-  - LMT:XNYS
-  - LUV:XNYS
-  - SCI:XNYS
-  - BYD:XNYS
-  - LNT:XNAS
-  - AIG:XNYS
-  - SAM:XNYS
-  - PLTR:XNAS
-  - GTES:XNYS
-  - GNRC:XNYS
-  - QSR:XNYS
-  - AMKR:XNAS
-  - PEGA:XNAS
-  - MDLZ:XNAS
-  - REG:XNAS
-  - SSB:XNYS
-  - FIGR:XNAS
-  - TRU:XNYS
-  - CPT:XNYS
-  - CUBE:XNYS
-  - BALL:XNYS
-  - CRL:XNYS
-  - BBY:XNYS
-  - CNP:XNYS
-  - TTWO:XNAS
-  - NLY:XNYS
-  - ASH:XNYS
-  - HLI:XNYS
-  - UBER:XNYS
-  - MANH:XNAS
-  - CFG:XNYS
-  - TREX:XNYS
-  - NFG:XNYS
-  - VIRT:XNYS
-  - PATH:XNYS
-  - FTNT:XNAS
-  - NUE:XNYS
-  - PEN:XNYS
-  - TOST:XNYS
-  - EXAS:XNAS
-  - TMUS:XNAS
-  - HIG:XNYS
-  - WFC:XNYS
-  - MS:XNYS
-  - USB:XNYS
-  - NNN:XNYS
-  - CVS:XNYS
-  - GLW:XNYS
-  - OWL:XNYS
-  - HD:XNYS
-  - NOV:XNYS
-  - CACI:XNYS
-  - AMP:XNYS
-  - ABNB:XNAS
-  - PODD:XNAS
-  - MTG:XNYS
-  - UAL:XNAS
-  - GLOB:XNYS
-  - STLD:XNAS
-  - DV:XNYS
-  - QXO:XNYS
-  - MORN:XNAS
-  - SYY:XNYS
-  - SPGI:XNYS
-  - AON:XNYS
-  - PSA:XNYS
-  - OKTA:XNAS
-  - LLYVK:XNAS
-  - ECL:XNYS
-  - MTD:XNYS
-  - STWD:XNYS
-  - PFG:XNAS
-  - SUI:XNYS
-  - MCHP:XNAS
-  - SLB:XNYS
-  - FCNCA:XNAS
-  - USFD:XNYS
-  - MTZ:XNYS
-  - FMC:XNYS
-  - STAG:XNYS
-  - IOT:XNYS
-  - SYF:XNYS
-  - F:XNYS
-  - DJT:XNAS
-  - CTAS:XNAS
-  - RITM:XNYS
-  - DD:XNYS
-  - MAS:XNYS
-  - NRG:XNYS
+  AMD: Advanced Micro Devices, Inc.
+  FRPT: Freshpet, Inc.
+  MTCH: Match Group, Inc.
+  GNTX: Gentex Corporation
+  RBA: RB Global, Inc.
+  FRMI: Fermi Inc.
+  PFE: Pfizer Inc.
+  FAST: Fastenal Company
+  GEV: GE Vernova Inc.
+  VRTX: Vertex Pharmaceuticals Incorporated
+  BWXT: BWX Technologies, Inc.
+  BJ: BJs Wholesale Club Holdings, Inc.
+  IR: Ingersoll Rand Inc.
+  JBL: Jabil Inc.
+  C: Citigroup Inc.
+  FCN: FTI Consulting, Inc.
+  GIS: General Mills, Inc.
+  KDP: Keurig Dr Pepper Inc.
+  MSFT: Microsoft Corporation
+  CPRT: Copart, Inc. (DE)
+  LKQ: LKQ Corporation
+  NEE: Nextra Energy, Inc.
+  AFG: American Financial Group, Inc.
+  MAN: ManpowerGroup
+  WEN: Wendy's Company (The)
+  KEY: KeyCorp
+  YUM: Yum! Brands, Inc.
+  CRCL: Circle Internet Group, Inc.
+  LNC: Lincoln National Corp.
+  ZM: Zoom Communications, Inc.
+  TAP: Molson Coors Beverage Company
+  TOL: Toll Brothers, Inc.
+  AJG: Arthur J. Gallagher & Co.
+  PAYC: PAYCOM SOFTWARE, INC.
+  CASY: Casey's General Stores, Inc.
+  KVUE: Kenvue Inc.
+  GPC: Genuine Parts Company
+  VLTO: Veralto Corporation
+  DE: Deere & Company
+  WU: The Western Union Company
+  TMO: Thermo Fisher Scientific, Inc.
+  ACGL: Arch Capital Group Ltd.
+  AFRM: Affirm Holdings, Inc.
+  MSI: Motorola Solutions, Inc.
+  NSC: Norfolk Southern Corp.
+  SPOT: Spotify Technology S.A.
+  SOFI: SoFi Technologies, Inc.
+  KBR: KBR, Inc.
+  HLNE: Hamilton Lane Incorporated
+  DRS: Leonardo DRS, Inc.
+  VST: Vistra Corp.
+  MUSA: MURPHY USA INC.
+  CLF: Cleveland-Cliffs Inc.
+  GMED: GLOBUS MEDICAL INC
+  S: SentinelOne, Inc.
+  AVGO: Broadcom Inc.
+  EXP: Eagle Materials, Inc.
+  CBOE: Cboe Global Markets, Inc.
+  GAP: The Gap, Inc.
+  AN: AutoNation, Inc.
+  LBRDA: Liberty Broadband Corporation
+  IAC: IAC Inc.
+  G: GENPACT LIMITED
+  JCI: Johnson Controls International plc
+  FBIN: Fortune Brands Innovations, Inc.
+  SBUX: Starbucks Corporation
+  INGM: Ingram Micro Holding Corporation
+  ELF: e.l.f. Beauty, Inc.
+  COTY: COTY INC
+  SF: Stifel Financial Corp.
+  INTC: Intel Corporation
+  ILMN: Illumina, Inc.
+  REGN: Regeneron Pharmaceuticals, Inc.
+  MIDD: Middleby Corporation (The)
+  BROS: Dutch Bros Inc.
+  A: Agilent Technologies Inc.
+  WTRG: Essential Utilities, Inc.
+  SEB: Seaboard Corporation
+  AIZ: Assurant, Inc.
+  TDG: TransDigm Group Incorporated
+  JNJ: Johnson & Johnson
+  U: Unity Software Inc.
+  NET: Cloudflare, Inc.
+  CAR: Avis Budget Group, Inc.
+  R: Ryder System, Inc.
+  HIW: Highwoods Properties Inc.
+  BA: Boeing Company
+  OXY: Occidental Petroleum Corporation
+  PTC: PTC Inc.
+  GFS: GlobalFoundries Inc.
+  HSIC: Henry Schein, Inc.
+  SAIC: Science Applications International Corporation
+  OHI: Omega Healthcare Investors Inc.
+  PRMB: Primo Brands Corporation
+  LSTR: Landstar System, Inc.
+  SYK: Stryker Corporation
+  SNA: Snap-on Incorporated
+  CEG: Constellation Energy Corporation
+  ROIV: Roivant Sciences Ltd.
+  SBAC: SBA Communications Corporation
+  TXRH: Texas Roadhouse, Inc.
+  DVA: DaVita Inc.
+  MKSI: MKS Inc.
+  CSL: Carlisle Companies, Inc.
+  SSD: Simpson Manufacturing Co., Inc.
+  SNOW: Snowflake Inc.
+  SCCO: Southern Copper Corporation
+  GOOG: Alphabet Inc.
+  MRP: Millrose Properties, Inc.
+  FERG: Ferguson Enterprises Inc.
+  STZ: Constellation Brands, Inc.
+  HUBS: HUBSPOT, INC.
+  EMN: Eastman Chemical Company
+  UDR: UDR, Inc.
+  FNF: Fidelity National Financial, Inc.
+  JKHY: Jack Henry & Associates, Inc.
+  HXL: Hexcel Corporation
+  LULU: lululemon athletica inc.
+  ESTC: Elastic N.V.
+  CRWD: CrowdStrike Holdings, Inc.
+  GM: General Motors Company
+  CMS: CMS Energy Corporation
+  HOOD: Robinhood Markets, Inc.
+  BOKF: BOK Financial Corporation
+  RTX: RTX Corporation
+  EWBC: East West Bancorp, Inc.
+  NTRA: Natera, Inc.
+  REYN: Reynolds Consumer Products Inc.
+  EL: The Estee Lauder Companies Inc.
+  TTEK: Tetra Tech, Inc.
+  TFC: Truist Financial Corporation
+  TXT: Textron, Inc.
+  JBHT: J.B. Hunt Transport Services, Inc.
+  FAF: First American Financial Corporation
+  JLL: Jones Lang LaSalle, Inc.
+  WLK: Westlake Corporation
+  ALGN: Align Technology, Inc.
+  EQH: Equitable Holdings, Inc.
+  AMZN: Amazon.com, Inc.
+  WY: Weyerhaeuser Company
+  STE: STERIS plc
+  AFL: Aflac Inc.
+  PNR: Pentair plc
+  WEC: WEC Energy Group, Inc.
+  RPRX: Royalty Pharma plc
+  SNDK: Sandisk Corporation
+  WSO: Watsco, Inc.
+  CMI: Cummins Inc.
+  CWEN: Clearway Energy, Inc.
+  OZK: Bank OZK
+  CBSH: Commerce Bancshares, Inc.
+  EME: EMCOR Group, Inc.
+  DG: Dollar General Corp.
+  CCL: Carnival Corporation
+  VRSN: VeriSign, Inc.
+  FWONA: Liberty Media Corporation
+  IBKR: Interactive Brokers Group, Inc.
+  HEI: HEICO Corporation
+  AA: Alcoa Corporation
+  EGP: EastGroup Properties Inc.
+  TEM: Tempus AI, Inc.
+  AMT: American Tower Corporation
+  BRBR: BellRing Brands, Inc.
+  WAT: Waters Corp
+  HLT: Hilton Worldwide Holdings Inc.
+  ORI: Old Republic International Corporation
+  VOYA: VOYA FINANCIAL, INC.
+  LSCC: Lattice Semiconductor Corporation
+  CELH: Celsius Holdings, Inc.
+  KMPR: Kemper Corporation
+  KRMN: Karman Holdings Inc.
+  CPAY: Corpay, Inc.
+  AU: AngloGold Ashanti plc
+  RNG: RINGCENTRAL, INC.
+  APTV: Aptiv PLC
+  PSX: PHILLIPS 66
+  HSY: The Hershey Company
+  MLM: Martin Marietta Materials
+  CSGP: CoStar Group, Inc.
+  MSM: MSC Industrial Direct Co., Inc.
+  DIS: The Walt Disney Company
+  VLO: Valero Energy Corporation
+  COLD: Americold Realty Trust, Inc.
+  META: Meta Platforms, Inc.
+  ES: Eversource Energy
+  ZG: Zillow Group, Inc.
+  D: Dominion Energy, Inc
+  ADI: Analog Devices, Inc.
+  SNDR: Schneider National, Inc.
+  GLIBK: GCI Liberty, Inc.
+  DXCM: DexCom, Inc.
+  FDS: Factset Research Systems
+  HAL: Halliburton Company
+  DECK: Deckers Outdoor Corp
+  DUOL: Duolingo, Inc.
+  HPQ: HP Inc.
+  HR: Healthcare Realty Trust Incorporated
+  JPM: JPMorgan Chase & Co.
+  H: Hyatt Hotels Corporation
+  DAL: Delta Air Lines, Inc.
+  SWK: Stanley Black & Decker, Inc.
+  MOS: The Mosaic Company
+  ZION: Zions Bancorporation N.A.
+  AMTM: Amentum Holdings, Inc.
+  FND: Floor & Decor Holdings, Inc.
+  AWK: American Water Works Company, Inc
+  ABBV: ABBVIE INC.
+  ATI: ATI Inc.
+  AVTR: Avantor, Inc.
+  INCY: Incyte Corp.
+  CAT: Caterpillar Inc.
+  RH: RH
+  PHM: Pultegroup, Inc.
+  EQT: EQT CORP
+  NCNO: nCino, Inc.
+  WBS: Webster Financial Corporation Waterbury
+  AS: Amer Sports, Inc.
+  EXC: Exelon Corporation
+  CPB: The Campbell's Company
+  MCD: McDonald's Corporation
+  KIM: Kimco Realty Corp.
+  HON: Honeywell International Inc.
+  AMH: AMERICAN HOMES 4 RENT
+  ANET: Arista Networks
+  JHG: Janus Henderson Group plc
+  EXEL: Exelixis, Inc.
+  ULTA: Ulta Beauty, Inc.
+  COR: Cencora, Inc.
+  FTI: TechnipFMC plc Ordinary Share
+  NOW: SERVICENOW, INC.
+  INSM: Insmed Incorporated
+  LHX: L3Harris Technologies, Inc.
+  TRMB: Trimble Inc.
+  AR: ANTERO RESOURCES CORPORATION
+  CLX: Clorox Company
+  AVT: Avnet, Inc.
+  RJF: Raymond James Financial, Inc.
+  OGN: Organon & Co.
+  COIN: Coinbase Global, Inc.
+  WTW: Willis Towers Watson Public Limited Company
+  ROKU: Roku, Inc.
+  LOW: Lowe's Companies Inc.
+  GWW: W.W. Grainger, Inc.
+  MP: MP Materials Corp.
+  RYAN: Ryan Specialty Holdings, Inc.
+  IRM: Iron Mountain Inc.
+  WYNN: Wynn Resorts, Limited
+  SMCI: Super Micro Computer, Inc.
+  SRE: Sempra
+  UPS: United Parcel Service, Inc.
+  REXR: REXFORD INDUSTRIAL REALTY, INC.
+  APA: APA Corporation
+  INSP: Inspire Medical Systems, Inc.
+  KNSL: Kinsale Capital Group, Inc.
+  PGR: Progressive Corporation
+  SSNC: SS&C Technologies Holdings, Inc.
+  NYT: New York Times Co.
+  ROST: Ross Stores, Inc.
+  DASH: DoorDash, Inc.
+  EQR: Equity Residential
+  FFIV: F5, Inc.
+  DRI: Darden Restaurants, Inc.
+  MDU: MDU Resources Group, Inc.
+  GILD: Gilead Sciences, Inc.
+  CMCSA: Comcast Corporation
+  LYB: LyondellBasell Industries N.V.
+  CRUS: Cirrus Logic, Inc.
+  SO: The Southern Company
+  AMGN: Amgen Inc.
+  MSGS: Madison Square Garden Sports Corp.
+  CRS: Carpenter Technology Corp
+  ZS: Zscaler, Inc.
+  BSY: Bentley Systems, Incorporated
+  HCA: HCA Healthcare, Inc.
+  VRT: Vertiv Holdings Co
+  PNW: Pinnacle West Capital Corporation
+  EIX: Edison International
+  BEPC: Brookfield Renewable Corporation
+  ECG: Everus Construction Group, Inc.
+  MSCI: MSCI, Inc.
+  HHH: Howard Hughes Holdings Inc.
+  NOC: Northrop Grumman Corp.
+  CTSH: Cognizant Technology Solutions Corporation
+  INVH: Invitation Homes Inc.
+  MAA: Mid-America Apartment Communities, Inc.
+  CDW: CDW Corporation
+  SJM: The J.M. Smucker Company
+  CAG: Conagra Brands, Inc.
+  CARR: Carrier Global Corporation
+  IRDM: Iridium Communications Inc
+  LOAR: Loar Holdings Inc.
+  ELAN: Elanco Animal Health Incorporated
+  GS: Goldman Sachs Group Inc.
+  BFAM: BRIGHT HORIZONS FAMILY SOLUTIONS INC.
+  ONON: On Holding AG
+  WMT: Walmart Inc.
+  TKO: TKO Group Holdings, Inc.
+  SEE: Sealed Air Corp.
+  MPC: MARATHON PETROLEUM CORPORATION
+  MDT: Medtronic plc
+  NSA: National Storage Affiliates Trust
+  PH: Parker-Hannifin Corporation
+  LLY: Eli Lilly & Co.
+  EPAM: EPAM SYSTEMS, INC.
+  KLAC: KLA Corporation
+  NVST: Envista Holdings Corporation
+  LINE: Lineage, Inc.
+  W: Wayfair Inc.
+  AAPL: Apple Inc.
+  UNH: UNITEDHEALTH GROUP INCORPORATED (Delaware)
+  TEAM: Atlassian Corporation
+  BC: Brunswick Corporation
+  AXON: Axon Enterprise, Inc.
+  OTIS: Otis Worldwide Corporation
+  FOX: Fox Corporation
+  SLM: SLM Corporation
+  AOS: A.O. Smith Corporation
+  WHR: Whirlpool Corp.
+  PCOR: Procore Technologies, Inc.
+  CHD: Church & Dwight Co., Inc.
+  RCL: Royal Caribbean Group
+  RL: Ralph Lauren Corporation
+  OLED: Universal Display Corporation
+  GWRE: GUIDEWIRE SOFTWARE, INC.
+  ACM: Aecom
+  PSN: Parsons Corporation
+  NTAP: NetApp, Inc.
+  CVNA: Carvana Co.
+  AM: Antero Midstream Corporation
+  ALLY: Ally Financial Inc.
+  RS: Reliance, Inc.
+  CNXC: Concentrix Corporation
+  KD: Kyndryl Holdings, Inc.
+  XRAY: DENTSPLY SIRONA Inc.
+  EBAY: eBay Inc.
+  FIVE: Five Below, Inc.
+  KEYS: Keysight Technologies, Inc.
+  NDSN: Nordson Corporation
+  ICE: Intercontinental Exchange  Inc.
+  BEN: Franklin Resources, Inc.
+  FTAI: FTAI Aviation Ltd.
+  TPR: Tapestry, Inc.
+  VEEV: Veeva Systems Inc.
+  BPOP: Popular, Inc.
+  MCK: McKesson Corporation
+  WSM: Williams-Sonoma, Inc.
+  MGM: MGM RESORTS INTERNATIONAL
+  LLYVA: Liberty Live Holdings, Inc.
+  PPC: Pilgrim's Pride Corporation
+  GPK: Graphic Packaging Holding Company
+  BR: Broadridge Financial Solutions Inc
+  KMI: Kinder Morgan, Inc.
+  BIIB: Biogen Inc.
+  IQV: IQVIA Holdings Inc.
+  JAZZ: Jazz Pharmaceuticals plc
+  ORCL: Oracle Corp
+  HOG: Harley-Davidson, Inc.
+  VKTX: Viking Therapeutics, Inc.
+  NWSA: News Corporation
+  GLPI: Gaming and Leisure Properties, Inc.
+  ALLE: Allegion Public Limited Company
+  OMC: Omnicom Group Inc.
+  LDOS: Leidos Holdings, Inc.
+  VZ: Verizon Communications
+  BKR: Baker Hughes Company
+  AXS: Axis Capital Holders Limited
+  AUR: Aurora Innovation, Inc.
+  OKE: Oneok, Inc.
+  PCAR: PACCAR Inc.
+  RARE: Ultragenyx Pharmaceutical Inc.
+  ARW: Arrow Electronics, Inc.
+  CORT: Corcept Therapeutics Incorporated
+  PNFP: Pinnacle Financial Partners, Inc.
+  KR: The Kroger Co.
+  WAL: Western Alliance Bancorporation
+  KHC: The Kraft Heinz Company
+  FDX: FedEx Corporation
+  FSLR: First Solar, Inc.
+  LPLA: LPL Financial Holdings Inc.
+  PNC: PNC Financial Services Group
+  AGCO: AGCO Corporation
+  NKE: Nike, Inc.
+  SGI: Somnigroup International Inc.
+  MTN: Vail Resorts, Inc.
+  FIS: Fidelity National Information Services, Inc.
+  VICI: VICI Properties Inc.
+  GL: Globe Life Inc.
+  BAC: Bank of America Corporation
+  ETN: Eaton Corporation, plc
+  SARO: StandardAero, Inc.
+  PLD: PROLOGIS, INC.
+  CNA: CNA Financial Corporation
+  ESS: Essex Property Trust, Inc
+  COST: Costco Wholesale Corporation
+  TFSL: TFS Financial Corporation
+  NU: Nu Holdings Ltd.
+  CSX: CSX Corporation
+  MKTX: MarketAxess Holdings, Inc.
+  L: Loews Corporation
+  CE: Celanese Corporation
+  RHI: Robert Half Inc.
+  FIX: Comfort Systems USA, Inc.
+  CGNX: Cognex Corporation
+  CVX: Chevron Corporation
+  RVMD: Revolution Medicines, Inc.
+  IP: International Paper Co.
+  CZR: Caesars Entertainment, Inc.
+  DDOG: Datadog, Inc.
+  GD: General Dynamics Corporation
+  BDX: Becton, Dickinson and Co.
+  OSK: Oshkosh Corp.
+  TW: Tradeweb Markets Inc.
+  DHI: D.R. Horton Inc.
+  BRKR: Bruker Corporation
+  WDC: Western Digital Corporation
+  COLB: Columbia Banking System, Inc.
+  DVN: Devon Energy Corporation
+  IDA: IDACORP, Inc.
+  DOCS: Doximity, Inc.
+  IONS: Ionis Pharmaceuticals, Inc.
+  RRX: Regal Rexnord Corporation
+  BK: Bank of New York Mellon Corporation
+  BMY: Bristol-Myers Squibb Co.
+  EPR: EPR Properties
+  WBD: Warner Bros. Discovery, Inc.
+  UI: Ubiquiti Inc.
+  HBAN: Huntington Bancshares Incorporated
+  LBTYK: Liberty Global Ltd.
+  CNM: Core & Main, Inc.
+  CHRW: C.H. Robinson Worldwide, Inc.
+  ROL: Rollins, Inc.
+  AAON: AAON, Inc.
+  TTC: Toro Company (The)
+  IVZ: Invesco LTD
+  BX: Blackstone Inc.
+  DTM: DT Midstream, Inc.
+  OVV: Ovintiv Inc.
+  FLO: Flowers Foods, Inc.
+  GGG: Graco Inc
+  AKAM: Akamai Technologies, Inc.
+  COP: ConocoPhillips
+  BMRN: BioMarin Pharmaceutical Inc.
+  ITW: Illinois Tool Works Inc.
+  LW: Lamb Weston Holdings, Inc.
+  SNPS: Synopsys, Inc.
+  VNO: Vornado Realty Trust
+  NEM: Newmont Corporation
+  ADP: Automatic Data Processing, Inc.
+  AES: AES Corporation
+  RKLB: Rocket Lab Corporation
+  ALSN: ALLISON TRANSMISSION HOLDINGS, INC.
+  QCOM: QUALCOMM Incorporated
+  DHR: Danaher Corporation
+  VFC: V.F. Corporation
+  BSX: Boston Scientific Corp.
+  EXPD: Expeditors International of Washington, Inc.
+  RIVN: Rivian Automotive, Inc.
+  XPO: XPO, Inc.
+  CSCO: Cisco Systems, Inc.
+  ADM: Archer Daniels Midland Company
+  MTDR: MATADOR RESOURCES COMPANY
+  AVY: Avery Dennison Corp.
+  ONTO: Onto Innovation Inc.
+  MOH: Molina Healthcare, Inc.
+  EQIX: Equinix, Inc.
+  CI: The Cigna Group
+  NVT: nVent Electric plc
+  CL: Colgate-Palmolive Company
+  TXN: Texas Instruments Incorporated
+  EHC: Encompass Health Corporation
+  FANG: Diamondback Energy, Inc.
+  TECH: Bio-Techne Corp
+  VSNT: Versant Media Group, Inc.
+  CRM: Salesforce, Inc.
+  SPG: Simon Property Group, Inc.
+  SLGN: Silgan Holdings Inc
+  CAH: Cardinal Health, Inc.
+  NI: NiSource Inc.
+  PPL: PPL Corporation
+  BILL: BILL Holdings, Inc.
+  BRO: Brown & Brown, Inc.
+  AMAT: Applied Materials, Inc.
+  LITE: Lumentum Holdings Inc.
+  ALB: Albemarle Corporation
+  ADBE: Adobe Inc.
+  BIRK: Birkenstock Holding plc
+  CF: CF Industries Holding, Inc.
+  PPG: PPG Industries, Inc.
+  TRV: The Travelers Companies, Inc.
+  LCID: Lucid Group, Inc.
+  CHH: Choice Hotels Intnl.
+  CHRD: Chord Energy Corporation
+  WCC: Wesco International Inc.
+  BXP: BXP, Inc.
+  HST: Host Hotels & Resorts, Inc.
+  QS: QuantumScape Corporation
+  RVTY: Revvity, Inc.
+  SHW: The Sherwin-Williams Company
+  MU: Micron Technology, Inc.
+  ESI: Element Solutions Inc.
+  HUN: Huntsman Corporation
+  IPGP: IPG Photonics Corporation
+  MRNA: Moderna, Inc.
+  BRX: BRIXMOR PROPERTY GROUP INC.
+  DOC: Healthpeak Properties, Inc.
+  ARE: Alexandria Real Estate Equities, Inc.
+  DLR: Digital Realty Trust, Inc.
+  DLTR: Dollar Tree Inc.
+  RDDT: Reddit, Inc.
+  MASI: Masimo Corporation
+  AGNC: AGNC Investment Corp.
+  ATR: AptarGroup, Inc.
+  TDC: TERADATA CORPORATION
+  SAIL: SailPoint, Inc.
+  FE: FirstEnergy Corp.
+  DLB: Dolby Laboratories, Inc
+  LVS: Las Vegas Sands Corp.
+  MHK: Mohawk Industries, Inc.
+  PEP: PepsiCo, Inc.
+  APO: Apollo Global Management, Inc.
+  MPWR: Monolithic Power Systems, Inc.
+  LRCX: Lam Research Corporation
+  PRU: Prudential Financial, Inc.
+  GRMN: Garmin Ltd
+  EVR: Evercore Inc.
+  SIRI: SiriusXM Holdings Inc.
+  ADC: Agree Realty Corporation
+  AAL: American Airlines Group Inc.
+  V: VISA Inc.
+  XOM: Exxon Mobil Corporation
+  CW: Curtiss-Wright Corp.
+  ETSY: Etsy, Inc.
+  RBLX: Roblox Corporation
+  EOG: EOG Resources, Inc.
+  BWA: BorgWarner Inc.
+  EXLS: ExlService Holdings, Inc.
+  MCO: Moody's Corporation
+  SOLV: Solventum Corporation
+  J: Jacobs Solutions Inc.
+  TGT: Target Corporation
+  ALGM: Allegro MicroSystems, Inc.
+  FOXA: Fox Corporation
+  VIK: Viking Holdings Ltd
+  LNG: Cheniere Energy Inc
+  PR: Permian Resources Corporation
+  MA: Mastercard Incorporated
+  NVDA: NVIDIA Corporation
+  CPNG: Coupang, Inc.
+  FCX: Freeport-McMoran Inc.
+  TWLO: Twilio Inc.
+  TT: Trane Technologies plc
+  BAM: Brookfield Asset Management Ltd.
+  DCI: Donaldson Company, Inc.
+  WRB: W.R. Berkley Corporation
+  FLUT: Flutter Entertainment plc
+  UAA: Under Armour, Inc.
+  TSLA: Tesla, Inc.
+  VRSK: Verisk Analytics, Inc.
+  MSA: Mine Safety Incorporated
+  ED: Consolidated Edison, Inc.
+  TSN: Tyson Foods, Inc.
+  RLI: RLI Corp.
+  TPG: TPG Inc.
+  AEE: Ameren Corporation
+  CTVA: Corteva, Inc.
+  CHDN: Churchill Downs, Incorporated
+  KMB: Kimberly-Clark Corporation
+  HII: Huntington Ingalls Industries, Inc.
+  RGA: Reinsurance Group of America, Incorporated
+  JEF: Jefferies Financial Group Inc.
+  CMG: Chipotle Mexican Grill, Inc.
+  GOOGL: Alphabet Inc.
+  ROK: Rockwell Automation, Inc.
+  AMCR: Amcor plc
+  SNX: TD SYNNEX Corporation
+  NVR: NVR, Inc.
+  ABT: Abbott Laboratories
+  XP: XP Inc.
+  TROW: T. Rowe Price Group, Inc.
+  ACI: Albertsons Companies, Inc.
+  MAR: Marriott International
+  XYL: Xylem Inc
+  SAIA: Saia, Inc.
+  PYPL: PayPal Holdings, Inc.
+  ADSK: Autodesk, Inc.
+  RNR: RenaissanceRe Holdings Ltd.
+  MLI: Mueller Industries, Inc.
+  ETR: Entergy Corporation
+  DKS: Dick's Sporting Goods, Inc.
+  WAB: Wabtec Inc.
+  YETI: YETI Holdings, Inc.
+  APG: APi Group Corporation
+  BBWI: Bath & Body Works, Inc.
+  DBX: Dropbox, Inc.
+  WH: Wyndham Hotels & Resorts, Inc.
+  PLNT: Planet Fitness, Inc.
+  DOX: Amdocs Limited
+  DOW: Dow Inc.
+  IEX: IDEX Corporation
+  TFX: Teleflex Incorporated
+  RGEN: Repligen Corporation
+  Z: Zillow Group, Inc.
+  CACC: Credit Acceptance Corporation
+  GEN: Gen Digital Inc.
+  WWD: Woodward, Inc.
+  RPM: RPM International, Inc.
+  ALK: Alaska Air Group, Inc.
+  THC: Tenet Healthcare Corporation
+  PKG: Packaging Corp of America
+  SCHW: The Charles Schwab Corporation
+  CERT: Certara, Inc.
+  THG: The Hanover Insurance Group, Inc.
+  COF: Capital One Financial
+  SOLS: Solstice Advanced Materials Inc.
+  GME: GameStop Corp.
+  WTM: White Mountains Insurance Group Ltd.
+  DUK: Duke Energy Corporation
+  AME: Ametek, Inc.
+  CUZ: Cousins Properties Inc.
+  SRPT: Sarepta Therapeutics, Inc.
+  CART: Maplebear Inc.
+  AVB: AvalonBay Communities, Inc.
+  KNX: Knight-Swift Transportation Holdings Inc.
+  LII: Lennox International Inc.
+  MRSH: Marsh
+  XEL: Xcel Energy Inc.
+  FHN: First Horizon Corporation
+  NEU: NewMarket Corporation
+  AGO: Assured Guaranty, LTD
+  HRL: Hormel Foods Corporation
+  WFRD: Weatherford International plc
+  FRHC: Freedom Holding Corp.
+  WM: Waste Management, Inc.
+  WDAY: Workday, Inc.
+  COLM: Columbia Sportswear Company
+  UHAL: U-Haul Holding Company
+  ASTS: AST SpaceMobile, Inc.
+  IBM: International Business Machines Corporation
+  XYZ: Block, Inc.
+  MTSI: MACOM Technology Solutions Holdings, Inc.
+  SMG: The Scotts Miracle-Gro Company
+  IDXX: IDEXX Laboratories, Inc.
+  PM: Philip Morris International Inc.
+  WST: West Pharmaceutical Services, Inc.
+  DOV: Dover Corporation
+  CR: Crane Company
+  FR: First Industrial Realty Trust, Inc.
+  ZBH: Zimmer Biomet Holdings, Inc.
+  ACHC: Acadia Healthcare Company, Inc.
+  MNST: Monster Beverage Corporation
+  STT: State Street Corporation
+  PANW: Palo Alto Networks, Inc.
+  DT: Dynatrace, Inc.
+  APLS: Apellis Pharmaceuticals, Inc.
+  CRH: CRH Public Limited Company
+  PEG: Public Service Enterprise Group Incorporated
+  CCK: Crown Holdings Inc.
+  CAVA: CAVA Group, Inc.
+  UTHR: United Therapeutics Corporation
+  TPL: Texas Pacific Land Corporation
+  BLK: Blackrock, Inc.
+  WING: Wingstop Inc.
+  MEDP: Medpace Holdings, Inc.
+  ELV: Elevance Health, Inc.
+  Q: Qnity Electronics, Inc.
+  CBRE: CBRE GROUP, INC.
+  COO: The Cooper Companies, Inc.
+  DAR: DARLING INGREDIENTS INC.
+  ALAB: Astera Labs, Inc.
+  MTB: M&T Bank Corp.
+  NCLH: Norwegian Cruise Line Holdings Ltd.
+  EEFT: Euronet Worldwide, Inc.
+  ZBRA: Zebra Technologies Corporation
+  ENTG: Entegris, Inc.
+  CCI: Crown Castle Inc.
+  VTR: Ventas, Inc.
+  SFD: Smithfield Foods, Inc.
+  DGX: Quest Diagnostics Inc.
+  IT: Gartner, Inc.
+  SITE: SiteOne Landscape Supply, Inc.
+  SHC: Sotera Health Company
+  EFX: Equifax, Incorporated
+  PVH: PVH Corp.
+  LFUS: Littelfuse, Inc.
+  CG: The Carlyle Group Inc.
+  RSG: Republic Services Inc.
+  WMS: ADVANCED DRAINAGE SYSTEMS, INC.
+  CCC: CCC Intelligent Solutions Holdings Inc.
+  LOPE: Grand Canyon Education, Inc.
+  PSTG: Everpure, Inc.
+  UWMC: UWM Holdings Corporation
+  URI: United Rentals, Inc.
+  BLD: TopBuild Corp.
+  LH: Labcorp Holdings Inc.
+  AYI: Acuity Inc.
+  ARES: Ares Management Corporation
+  BHF: Brighthouse Financial, Inc.
+  RMD: ResMed Inc.
+  MMM: 3M Company
+  HUM: Humana Inc.
+  NTRS: Northern Trust Corporation
+  AZO: AutoZone, Inc.
+  PENN: PENN Entertainment, Inc.
+  APPF: AppFolio, Inc.
+  AWI: Armstrong World Industries, Inc.
+  SON: Sonoco Products Company
+  NWS: News Corporation
+  SEIC: SEI Investments Company
+  GEHC: GE HealthCare Technologies Inc.
+  NWL: Newell Brands Inc.
+  RRC: Range Resources Corp
+  LYV: Live Nation Entertainment Inc.
+  PRI: PRIMERICA, INC.
+  HAS: Hasbro, Inc.
+  PRGO: PERRIGO COMPANY PLC
+  RKT: Rocket Companies, Inc.
+  UNM: Unum Group
+  TYL: Tyler Technologies, Inc.
+  TSCO: Tractor Supply Company
+  ZTS: ZOETIS INC.
+  LAZ: Lazard, Inc.
+  CXT: Crane NXT, Co.
+  VMC: Vulcan Materials Company(Holding Company)
+  FOUR: Shift4 Payments, Inc.
+  MO: Altria Group, Inc.
+  GDDY: GoDaddy Inc
+  KEX: Kirby Corporation
+  PK: Park Hotels & Resorts Inc.
+  WTFC: Wintrust Financial Corporation
+  NBIX: Neurocrine Biosciences, Inc.
+  DKNG: DraftKings Inc.
+  NFLX: Netflix, Inc.
+  CDNS: Cadence Design Systems, Inc.
+  MET: MetLife, Inc.
+  LIN: Linde plc
+  DDS: Dillards Inc.
+  ACN: Accenture PLC
+  SW: Smurfit WestRock plc
+  EXE: Expand Energy Corporation
+  HUBB: Hubbell Incorporated
+  EA: Electronic Arts Inc.
+  ORLY: O'Reilly Automotive, Inc.
+  DINO: HF Sinclair Corporation
+  OC: Owens Corning
+  IFF: International Flavors & Fragrances Inc.
+  CHE: Chemed Corporation
+  CHWY: Chewy, Inc.
+  CME: CME Group Inc.
+  UNP: Union Pacific Corp.
+  DTE: DTE Energy Company
+  TKR: The Timken Company
+  GPN: Global Payments, Inc.
+  VNOM: Viper Energy, Inc.
+  WSC: WillScot Holdings Corporation
+  BLSH: Bullish
+  O: Realty Income Corporation
+  PB: Prosperity Bancshares Inc
+  ELS: Equity Lifestyle Properties, Inc.
+  HRB: H&R Block, Inc.
+  GE: GE Aerospace
+  VVV: Valvoline Inc.
+  GTM: ZoomInfo Technologies Inc
+  OGE: OGE Energy Corp.
+  DOCU: DocuSign, Inc.
+  TJX: TJX Companies, Inc. (The)
+  KKR: KKR & Co. Inc.
+  EW: Edwards Lifesciences Corp
+  BAH: Booz Allen Hamilton Holding Corporation
+  UHS: Universal Health Services, Inc.
+  SN: SharkNinja, Inc.
+  HOLX: Hologic, Inc.
+  ESAB: ESAB Corporation
+  INGR: Ingredion Incorporated
+  FNB: F.N.B. Corp
+  CFR: Cullen/Frost Bankers Inc.
+  APP: Applovin Corporation
+  T: AT&T Inc.
+  BG: Bunge Global SA
+  FRT: Federal Realty Investment Trust
+  KO: Coca-Cola Company
+  EVRG: Evergy, Inc.
+  WPC: W.P. Carey Inc. (REIT)
+  LPX: Louisiana-Pacific Corp.
+  TLN: Talen Energy Corporation
+  OMF: OneMain Holdings, Inc.
+  PG: Procter & Gamble Company
+  KRC: Kilroy Realty Corp.
+  QGEN: QIAGEN N.V.
+  ADT: ADT Inc.
+  BIO: Bio-Rad Laboratories, Inc
+  MAT: Mattel, Inc.
+  EG: Everest Group, Ltd.
+  TDY: Teledyne Technologies Incorporated
+  HWM: Howmet Aerospace Inc.
+  RAL: Ralliant Corporation
+  LBTYA: Liberty Global Ltd.
+  MKL: Markel Group Inc.
+  WEX: WEX Inc.
+  APD: Air Products & Chemicals, Inc.
+  FISV: Fiserv, Inc.
+  PWR: Quanta Services, Inc.
+  ENPH: Enphase Energy, Inc.
+  LAD: Lithia Motors, Inc.
+  WMB: Williams Companies Inc.
+  LAMR: Lamar Advertising Company
+  VNT: Vontier Corporation
+  SFM: Sprouts Farmers Market, Inc.
+  LYFT: Lyft, Inc.
+  BAX: Baxter International Inc.
+  TNL: Travel + Leisure Co.
+  RGLD: Royal Gold, Inc.
+  APH: Amphenol Corporation
+  UGI: UGI Corporation
+  ARMK: ARAMARK
+  PINS: Pinterest, Inc.
+  AMG: Affiliated Managers Group
+  THO: Thor Industries, Inc.
+  CNH: CNH INDUSTRIAL N.V.
+  SMMT: Summit Therapeutics Inc.
+  ATO: Atmos Energy Corporation
+  VMI: Valmont Industries, Inc.
+  BURL: BURLINGTON STORES, INC.
+  TIGO: Millicom International Cellular S.A.
+  TRGP: Targa Resources Corp.
+  FLEX: Flex Ltd.
+  SWKS: Skyworks Solutions, Inc.
+  LEN: Lennar Corporation
+  POST: POST HOLDINGS, INC.
+  RF: Regions Financial Corp.
+  CIEN: Ciena Corporation
+  CNC: Centene Corporation
+  RYN: Rayonier Inc.
+  AIT: Applied Industrial Technologies, Inc.
+  ROP: Roper Technologies, Inc.
+  PCG: PG&E Corporation
+  WELL: Welltower Inc.
+  ODFL: Old Dominion Freight Line, Inc.
+  AXTA: Axalta Coating Systems Ltd.
+  HPE: Hewlett Packard Enterprise Company
+  RBC: RBC Bearings Incorporated
+  VTRS: Viatris Inc.
+  NXST: Nexstar Media Group, Inc.
+  CHTR: Charter Communications, Inc.
+  PCTY: Paylocity Holding Corporation
+  MSTR: Strategy Inc
+  LBRDK: Liberty Broadband Corporation
+  NDAQ: Nasdaq, Inc.
+  TER: Teradyne, Inc.
+  MRVL: Marvell Technology, Inc.
+  PAG: Penske Automotive Group, Inc.
+  AL: Air Lease Corporation
+  DELL: Dell Technologies Inc.
+  MDB: MongoDB, Inc.
+  UA: Under Armour, Inc.
+  COKE: Coca-Cola Consolidated, Inc.
+  QRVO: Qorvo, Inc.
+  FICO: Fair Isaac Corporation
+  HAYW: Hayward Holdings, Inc.
+  BLDR: Builders FirstSource, Inc.
+  ALL: The Allstate Corporation
+  FLS: Flowserve Corporation
+  ISRG: Intuitive Surgical, Inc.
+  POOL: Pool Corporation
+  EXR: Extra Space Storage, Inc.
+  PFGC: Performance Food Group Company
+  EXPE: Expedia Group, Inc.
+  CROX: Crocs, Inc.
+  CINF: Cincinnati Financial Corporation
+  ST: Sensata Technologies Holding plc
+  CAI: Caris Life Sciences, Inc.
+  CLVT: Clarivate Plc
+  AEP: American Electric Power Company, Inc.
+  CLH: Clean Harbors, Inc
+  CB: Chubb Limited
+  ITT: ITT Inc.
+  DXC: DXC Technology Company
+  NTNX: Nutanix, Inc.
+  HALO: Halozyme Therapeutics, Inc.
+  BKNG: Booking Holdings Inc.
+  PAYX: Paychex, Inc.
+  AXP: American Express Company
+  KMX: CarMax Inc.
+  LECO: Lincoln Electric Holdings, Inc.
+  MRK: Merck & Co., Inc.
+  FTV: Fortive Corporation
+  OLLI: Ollie's Bargain Outlet Holdings, Inc.
+  OLN: Olin Corp.
+  LEA: Lear Corporation
+  MKC: McCormick & Company, Incorporated Non-VTG CS
+  CTRA: Coterra Energy Inc.
+  COHR: Coherent Corp.
+  FWONK: Liberty Media Corporation
+  ALNY: Alnylam Pharmaceuticals, Inc.
+  DPZ: Domino's Pizza Inc
+  GTLB: GitLab Inc.
+  GXO: GXO Logistics, Inc.
+  INTU: Intuit Inc.
+  JHX: James Hardie Industries plc
+  EMR: Emerson Electric Co.
+  TTD: The Trade Desk, Inc.
+  M: Macy's Inc.
+  FHB: First Hawaiian, Inc.
+  FITB: Fifth Third Bancorp
+  LMT: Lockheed Martin Corp.
+  LUV: Southwest Airlines Co.
+  SCI: Service Corporation International
+  BYD: Boyd Gaming Corporation
+  LNT: Alliant Energy Corporation
+  AIG: American International Group, Inc.
+  SAM: Boston Beer Company
+  PLTR: Palantir Technologies Inc.
+  GTES: Gates Industrial Corporation plc
+  GNRC: GENERAC HOLDINGS INC
+  QSR: Restaurant Brands International Inc.
+  AMKR: Amkor Technology, Inc.
+  PEGA: Pegasystems Inc.
+  MDLZ: Mondelez International, Inc.
+  REG: Regency Centers Corporation
+  SSB: SouthState Bank Corporation
+  FIGR: Figure Technology Solutions, Inc.
+  TRU: TransUnion
+  CPT: Camden Property Trust
+  CUBE: CubeSmart
+  BALL: Ball Corporation
+  CRL: Charles River Laboratories International, Inc.
+  BBY: Best Buy Company, Inc.
+  CNP: CenterPoint Energy, Inc.
+  TTWO: Take-Two Interactive Software, Inc.
+  NLY: Annaly Capital Management. Inc.
+  ASH: Ashland Inc.
+  HLI: Houlihan Lokey, Inc.
+  UBER: Uber Technologies, Inc.
+  MANH: Manhattan Associates, Inc.
+  CFG: Citizens Financial Group, Inc.
+  TREX: Trex Company, Inc.
+  NFG: National Fuel Gas Co.
+  VIRT: Virtu Financial, Inc.
+  PATH: UiPath, Inc.
+  FTNT: Fortinet, Inc.
+  NUE: Nucor Corporation
+  PEN: Penumbra, Inc.
+  TOST: Toast, Inc.
+  EXAS: Exact Sciences Corporation
+  TMUS: T-Mobile US, Inc.
+  HIG: The Hartford Insurance Group, Inc.
+  WFC: Wells Fargo & Co.
+  MS: Morgan Stanley
+  USB: U.S. Bancorp
+  NNN: NNN REIT, Inc.
+  CVS: CVS HEALTH CORPORATION
+  GLW: Corning Incorporated
+  OWL: Blue Owl Capital Inc.
+  HD: Home Depot, Inc.
+  NOV: NOV Inc.
+  CACI: CACI INTERNATIONAL CLA
+  AMP: Ameriprise Financial, Inc.
+  ABNB: Airbnb, Inc.
+  PODD: Insulet Corporation
+  MTG: MGIC Investment Corp.
+  UAL: United Airlines Holdings, Inc.
+  GLOB: GLOBANT S.A.
+  STLD: Steel Dynamics, Inc.
+  DV: DoubleVerify Holdings, Inc.
+  QXO: QXO, Inc.
+  MORN: Morningstar, Inc.
+  SYY: Sysco Corporation
+  SPGI: S&P Global Inc.
+  AON: Aon plc
+  PSA: Public Storage
+  OKTA: Okta, Inc.
+  LLYVK: Liberty Live Holdings, Inc.
+  ECL: Ecolab, Inc.
+  MTD: Mettler-Toledo International
+  STWD: STARWOOD PROPERTY TRUST, INC.
+  PFG: Principal Financial Group Inc
+  SUI: Sun Communities, Inc
+  MCHP: Microchip Technology Incorporated
+  SLB: SLB Limited
+  FCNCA: First Citizens BancShares, Inc.
+  USFD: US Foods Holding Corp.
+  MTZ: MasTec, Inc.
+  FMC: FMC Corporation
+  STAG: STAG INDUSTRIAL, INC.
+  IOT: Samsara Inc.
+  SYF: SYNCHRONY FINANCIAL
+  F: Ford Motor Company
+  DJT: Trump Media & Technology Group Corp.
+  CTAS: Cintas Corporation
+  RITM: Rithm Capital Corp.
+  DD: DuPont de Nemours, Inc.
+  MAS: Masco Corporation
+  NRG: NRG Energy, Inc.

@@ -29,7 +29,8 @@ class ArticleRepository:
         self._data_dir = data_dir
         self._dirty = False
         self._index_df = self._load_index()
-        self._staged: list[Article] = []
+        self._known_urls: set[str] = set(self._index_df["url"].tolist())
+        self._staged: dict[str, Article] = {}
         self._pending_ticker_updates: dict[str, list[str]] = {}
 
     def store(self, article: Article) -> None:
@@ -37,22 +38,8 @@ class ArticleRepository:
 
         Call :meth:`flush` to persist staged articles to disk.
         """
-        self._staged.append(article)
-
-        row = pd.DataFrame(
-            [
-                {
-                    "id": article["id"],
-                    "url": article["url"],
-                    "title": article["title"],
-                    "publish_date": article["publish_date"].isoformat(),
-                    "source_name": article["source_name"],
-                    "language": article["language"],
-                    "tickers": article["tickers"],
-                }
-            ]
-        )
-        self._index_df = pd.concat([self._index_df, row], ignore_index=True)
+        self._staged[article["url"]] = article
+        self._known_urls.add(article["url"])
         self._dirty = True
 
     def add_tickers(self, url: str, tickers: list[str]) -> None:
@@ -61,10 +48,17 @@ class ArticleRepository:
         The article must already be in the index. Call :meth:`flush` to persist
         the update to disk.
         """
-        mask = self._index_df["url"] == url
-        if not mask.any():
+        if url not in self._known_urls:
             raise RuntimeError(f"Article not in index: {url}")
-        existing = self._index_df.loc[mask, "tickers"].iloc[0]
+
+        if url in self._staged:
+            article = self._staged[url]
+            article["tickers"] = list(dict.fromkeys(list(article["tickers"]) + tickers))
+            self._dirty = True
+            return
+
+        mask = self._index_df["url"] == url
+        existing = list(self._index_df.loc[mask, "tickers"].iloc[0])
         merged = list(dict.fromkeys(existing + tickers))
         self._index_df.loc[mask, "tickers"] = pd.Series([merged] * mask.sum(), index=self._index_df.index[mask])
         self._pending_ticker_updates[url] = merged
@@ -72,11 +66,10 @@ class ArticleRepository:
 
     def partition_stories(self, stories: list[Story]) -> tuple[list[Story], list[Story]]:
         """Split *stories* into (new, existing) based on URL presence in the index."""
-        known_urls = set(self._index_df["url"].values)
         new: list[Story] = []
         existing: list[Story] = []
         for story in stories:
-            (existing if story["url"] in known_urls else new).append(story)
+            (existing if story["url"] in self._known_urls else new).append(story)
         return new, existing
 
     def read_month(self, year: int, month: int) -> pd.DataFrame:
@@ -107,11 +100,11 @@ class ArticleRepository:
 
     def exists(self, url: str) -> bool:
         """Return True if a URL is already in the index."""
-        return url in self._index_df["url"].values
+        return url in self._known_urls
 
     def filter_new(self, stories: list[Story]) -> list[Story]:
         """Return only stories whose URL is not yet in the index."""
-        return [s for s in stories if not self.exists(s["url"])]
+        return [s for s in stories if s["url"] not in self._known_urls]
 
     def flush(self) -> None:
         """Write staged articles and pending ticker updates to disk."""
@@ -120,7 +113,7 @@ class ArticleRepository:
         self._data_dir.mkdir(parents=True, exist_ok=True)
 
         staged_by_month: dict[str, list[Article]] = {}
-        for article in self._staged:
+        for article in self._staged.values():
             key = article["publish_date"].strftime("%Y-%m")
             staged_by_month.setdefault(key, []).append(article)
 
@@ -137,6 +130,23 @@ class ArticleRepository:
                 staged_by_month.get(month_key, []),
                 ticker_months.get(month_key, {}),
             )
+
+        if self._staged:
+            new_rows = pd.DataFrame(
+                [
+                    {
+                        "id": a["id"],
+                        "url": a["url"],
+                        "title": a["title"],
+                        "publish_date": a["publish_date"].isoformat(),
+                        "source_name": a["source_name"],
+                        "language": a["language"],
+                        "tickers": a["tickers"],
+                    }
+                    for a in self._staged.values()
+                ]
+            )
+            self._index_df = pd.concat([self._index_df, new_rows], ignore_index=True)
 
         self._staged.clear()
         self._pending_ticker_updates.clear()
