@@ -35,6 +35,61 @@ def momentum_slope(closes: pd.Series, window: int = 20) -> float:
     return slope
 
 
+def apply_momentum_gate(
+    probs: np.ndarray,
+    targets: np.ndarray,
+    closes: pd.Series,
+    win_dates: np.ndarray,
+    window: int = 20,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Apply momentum pre-filter at inference: retain only uptrend windows.
+
+    Computes the linear-regression slope of the last *window* closes for each
+    window end date and returns arrays masked to uptrend windows (slope > 0).
+
+    Parameters
+    ----------
+    probs:
+        Model output probabilities, shape ``(N,)``.
+    targets:
+        Ground-truth labels, shape ``(N,)``.
+    closes:
+        Full close price series with DatetimeIndex (must cover all *win_dates*).
+    win_dates:
+        Array of window end dates, length N — typically
+        ``FusedDataset["dates"][test_start:]``.
+    window:
+        Number of trailing closes used to fit the slope (default 20 trading
+        days, ~1 month).
+
+    Returns
+    -------
+    ``(filtered_probs, filtered_targets, uptrend_mask)`` where *uptrend_mask*
+    is a boolean array of length N.  Use it to index back into the original
+    arrays or to report coverage.
+
+    Notes
+    -----
+    This is a **hard inference-time gate** (option A): predictions for
+    downtrend windows are discarded without the model having seen the slope
+    signal during training.
+
+    Future enhancements
+    -------------------
+    - **Option B** — feed ``momentum_slope()`` as a scalar feature via
+      ``build_dataset(include_momentum_slope=True)`` so the model learns
+      *when* trend context is informative, including genuine reversal signals.
+    - **Option C** — train separate models per regime (uptrend / downtrend)
+      for full specialisation at the cost of halved training data per model.
+    """
+    slopes = np.array(
+        [_slope_at(closes, pd.Timestamp(d), window) for d in win_dates],
+        dtype=np.float32,
+    )
+    mask = slopes > 0
+    return probs[mask], targets[mask], mask
+
+
 def screen_by_coverage(
     repository: ArticleRepository,
     tickers: list[str],
@@ -107,6 +162,14 @@ def screen_by_coverage(
 # ------------------------------------------------------------------
 # Private helpers
 # ------------------------------------------------------------------
+
+
+def _slope_at(closes: pd.Series, end_ts: pd.Timestamp, window: int) -> float:
+    """Return momentum slope at *end_ts* using the last *window* closes."""
+    loc = closes.index.get_indexer([end_ts], method="pad")[0]
+    if loc < window - 1:
+        return 0.0
+    return momentum_slope(closes.iloc[loc - window + 1 : loc + 1], window=window)
 
 
 def _iter_months(

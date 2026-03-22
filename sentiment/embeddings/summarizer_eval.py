@@ -4,13 +4,17 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Callable
+from typing import TYPE_CHECKING, Any, Callable
 
+import pandas as pd
 from rouge_score import rouge_scorer
 
 from ..sources.news.models import Article
 from .encoder import SentimentEncoder
 from .summarizer import Summarizer
+
+if TYPE_CHECKING:
+    from ..features.technical import TechnicalFactors
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +88,107 @@ def evaluate_rouge(
     means["mean_seconds_per_article"] = total_time / n if n else 0.0
     means["n_articles"] = n
     return means
+
+
+def evaluate_downstream_auc(
+    summarizer_model: str | None,
+    ticker_articles: dict[str, list[Article]],
+    df: pd.DataFrame,
+    technical: TechnicalFactors,
+    ticker: str,
+    device: str = "cpu",
+    n_epochs: int = 50,
+    seed: int | None = None,
+    fundamental_df: pd.DataFrame | None = None,
+) -> dict[str, Any]:
+    """Run the full pipeline for a given summarizer and return downstream model AUC.
+
+    Runs summarize → FinBERT encode → build dataset → train LSTM → bootstrap
+    evaluate on the test split.  This is the only honest comparison between
+    summarizer candidates: ROUGE measures faithfulness to source, not trading
+    signal quality.
+
+    Parameters
+    ----------
+    summarizer_model:
+        HuggingFace seq2seq model name, or ``None`` to skip summarization
+        (raw article text is passed directly to FinBERT, which truncates at
+        512 tokens).  Useful as a no-summarization baseline.
+    ticker_articles:
+        ``{ticker: [Article, ...]}`` — same format as
+        ``SentimentPipeline.process_ticker_articles``.
+    df:
+        OHLCV DataFrame with DatetimeIndex for *ticker*.
+    technical:
+        ``TechnicalFactors`` instance.
+    ticker:
+        Ticker symbol.
+    device:
+        ``"cpu"`` or ``"cuda"``.
+    n_epochs:
+        Maximum training epochs (early stopping applies, so most runs stop
+        earlier).
+    seed:
+        Random seed for reproducibility.
+    fundamental_df:
+        Optional ``FundamentalCache.load_df(ticker)`` output.
+
+    Returns
+    -------
+    Dict with keys:
+
+    - ``summarizer_model`` — the model name passed in (or ``None``)
+    - ``auc_mean``, ``auc_ci_low``, ``auc_ci_high`` — bootstrap AUC (95% CI)
+    - ``best_epoch`` — epoch at which the best val AUC was reached
+    - ``best_val_auc`` — best validation AUC during training
+    - ``n_test_samples`` — number of test windows evaluated
+    """
+    # Lazy imports avoid circular dependencies and keep module load fast
+    from ..features.dataloader import build_dataset, make_loaders
+    from ..model import SentimentLSTM, bootstrap_evaluate, train_model
+    from .pipeline import SentimentPipeline
+
+    logger.info(
+        "evaluate_downstream_auc: summarizer_model=%s  ticker=%s",
+        summarizer_model,
+        ticker,
+    )
+
+    pipeline = SentimentPipeline(device=device, summarizer_model=summarizer_model)
+    sentiment_df = pipeline.process_ticker_articles(ticker_articles)
+
+    dataset = build_dataset(
+        df,
+        technical,
+        sentiment_df=sentiment_df if not sentiment_df.empty else None,
+        ticker=ticker,
+        fundamental_df=fundamental_df,
+    )
+
+    n_fund = dataset["X_fundamental"].shape[1]
+    n_sprob = dataset["X_sentiment_probs"].shape[1]
+
+    train_loader, val_loader, test_loader, _, _ = make_loaders(dataset)
+    model = SentimentLSTM(n_fundamentals=n_fund, n_sentiment_probs=n_sprob)
+    history = train_model(
+        model,
+        train_loader,
+        val_loader,
+        n_epochs=n_epochs,
+        device=device,
+        seed=seed,
+    )
+
+    result = bootstrap_evaluate(model, test_loader, device=device, seed=seed)
+    return {
+        "summarizer_model": summarizer_model,
+        "auc_mean": result["auc_mean"],
+        "auc_ci_low": result["auc_ci_low"],
+        "auc_ci_high": result["auc_ci_high"],
+        "best_epoch": history["best_epoch"],
+        "best_val_auc": history["best_val_auc"],
+        "n_test_samples": result["n_samples"],
+    }
 
 
 def label_agreement_rate(
