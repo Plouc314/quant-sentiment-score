@@ -32,9 +32,6 @@ class Summarizer:
         self._model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
         self._model.eval().to(self.device)
 
-        # keep a FinBERT tokenizer purely for the short-content check
-        self._fin_tok = AutoTokenizer.from_pretrained("ProsusAI/finbert")
-
     def summarize(self, content: str) -> str:
         """Compress article content via BART-CNN.
 
@@ -44,9 +41,11 @@ class Summarizer:
         if not content or not content.strip():
             return ""
 
-        # Short-content bypass
-        fin_tokens = self._fin_tok(content, truncation=False)
-        if len(fin_tokens["input_ids"]) <= _FINBERT_MAX_LENGTH:
+        # Short-content bypass: use BART tokenizer as a proxy for FinBERT length.
+        # BART and FinBERT tokenizers produce similar token counts for financial
+        # prose, so this avoids loading a second model just for the length check.
+        bart_tokens = self._tok(content, truncation=False)
+        if len(bart_tokens["input_ids"]) <= _FINBERT_MAX_LENGTH:
             return content
 
         inputs = self._tok(

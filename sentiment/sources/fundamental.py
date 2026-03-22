@@ -146,13 +146,15 @@ class FundamentalCache:
 
         if self._path.exists():
             existing = pd.read_csv(self._path)
-            # Migrate legacy files that have no date column
             if "date" not in existing.columns:
-                logger.warning(
-                    "fundamentals.csv has no 'date' column — migrating to dated format"
+                raise RuntimeError(
+                    f"{self._path} has no 'date' column (legacy format). "
+                    "Add a 'date' column manually with the correct snapshot dates "
+                    "before calling store() — automatic backdating would corrupt "
+                    "the forward-fill logic in align_fundamentals."
                 )
-                existing.insert(0, "date", today)
             existing = pd.concat([existing, row], ignore_index=True)
+            existing = existing.drop_duplicates(subset=["date", "symbol"], keep="last")
         else:
             existing = row
 

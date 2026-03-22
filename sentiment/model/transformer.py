@@ -109,6 +109,13 @@ class SentimentTransformer(nn.Module):
         """
         batch, window, _ = tech.shape
 
+        max_seq_len = self.pos_embedding.num_embeddings
+        if window > max_seq_len:
+            raise RuntimeError(
+                f"Input window ({window}) exceeds max_seq_len ({max_seq_len}). "
+                "Rebuild the model with a larger max_seq_len or reduce the window size."
+            )
+
         # Project sentiment to same dim as tech, then fuse
         projected = self.sentiment_proj(sentiment)           # (batch, window, n_factors)
         fused = torch.cat([tech, projected], dim=-1)         # (batch, window, n_factors*2)

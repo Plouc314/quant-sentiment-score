@@ -82,13 +82,19 @@ def train_model(
     if seed is not None:
         torch.manual_seed(seed)
         if torch.cuda.is_available():
-            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
 
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", factor=0.5, patience=5
     )
+    if pos_weight is not None and pos_weight > 50:
+        logger.warning(
+            "pos_weight=%.1f is very large and may cause loss/gradient explosion. "
+            "Consider clamping to ≤ 50 or using gradient clipping.",
+            pos_weight,
+        )
     weight = (
         torch.tensor([pos_weight], dtype=torch.float32, device=device)
         if pos_weight is not None
@@ -249,6 +255,9 @@ def bootstrap_evaluate(
         )
 
     def _ci(samples: list[float]) -> tuple[float, float, float]:
+        if not samples:
+            logger.warning("bootstrap_evaluate: no valid resamples for CI calculation")
+            return float("nan"), float("nan"), float("nan")
         arr = np.array(samples)
         return float(arr.mean()), float(np.percentile(arr, lo)), float(np.percentile(arr, hi))
 

@@ -116,6 +116,8 @@ def align_sentiment(
     lookup: dict = {}
     for _, row in ticker_df.iterrows():
         dt = pd.Timestamp(row["date"]).date()
+        if dt in lookup:
+            logger.warning("align_sentiment: duplicate date %s for ticker %s — keeping last row", dt, ticker)
         lookup[dt] = row["embedding"]
 
     for i, ts in enumerate(index):
@@ -137,17 +139,27 @@ def align_sentiment_probs(
     articles published on that date.  Zero vector for dates without news.
     Returns ``(N, 0)`` when *sentiment_df* is ``None`` or has no
     ``sentiment_probs`` column (backward-compatible with older pipeline output).
+
+    Shape note: ``(N, 0)`` means the feature branch is disabled (no column in
+    the pipeline output at all).  ``(N, 3)`` of zeros means the branch is
+    enabled but this ticker has no articles — the model still receives the
+    3-dim input, just with a zero vector.  These two cases are intentionally
+    distinct so that ``build_dataset`` can derive the correct ``n_sentiment_probs``
+    for the model architecture.
     """
     if sentiment_df is None or sentiment_df.empty or "sentiment_probs" not in sentiment_df.columns:
         return np.zeros((len(index), 0), dtype=np.float32)
 
     ticker_df = sentiment_df[sentiment_df["ticker"] == ticker]
     if ticker_df.empty:
+        logger.debug("align_sentiment_probs: no rows for ticker %s — returning zero (N, 3) array", ticker)
         return np.zeros((len(index), 3), dtype=np.float32)
 
     lookup: dict = {}
     for _, row in ticker_df.iterrows():
         dt = pd.Timestamp(row["date"]).date()
+        if dt in lookup:
+            logger.warning("align_sentiment_probs: duplicate date %s for ticker %s — keeping last row", dt, ticker)
         lookup[dt] = row["sentiment_probs"]
 
     result = np.zeros((len(index), 3), dtype=np.float32)

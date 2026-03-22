@@ -123,8 +123,8 @@ class ArticleRepository:
         rows = self._index_df[self._index_df["id"] == article_id]
         if rows.empty:
             return None
-        publish_date_str = str(rows.iloc[0]["publish_date"])
-        year, month = int(publish_date_str[:4]), int(publish_date_str[5:7])
+        ts = pd.Timestamp(rows.iloc[0]["publish_date"])
+        year, month = ts.year, ts.month
         month_df = self.read_month(year, month)
         article_rows = month_df[month_df["id"] == article_id]
         if article_rows.empty:

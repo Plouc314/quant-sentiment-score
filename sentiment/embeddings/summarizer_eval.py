@@ -99,6 +99,12 @@ def label_agreement_rate(
 
     Articles with no text or where the short-content bypass fires (summary == text)
     are excluded from the denominator.
+
+    Returns
+    -------
+    Agreement rate in ``[0.0, 1.0]``, or ``float("nan")`` when no articles
+    qualify (all skipped by bypass or empty text).  Callers must check
+    ``math.isnan(result)`` before using the return value in comparisons.
     """
     agreed = 0
     total = 0
