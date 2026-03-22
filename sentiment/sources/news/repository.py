@@ -113,6 +113,34 @@ class ArticleRepository:
         df["publish_date"] = pd.to_datetime(df["publish_date"]).dt.date
         return df
 
+    def load_article(self, article_id: str) -> Article | None:
+        """Return a single article by ID, including full text.
+
+        Looks up which month parquet file the article belongs to via the
+        in-memory index, then reads only that file.  Returns ``None`` if the
+        ID is not found in the index or the parquet file is missing.
+        """
+        rows = self._index_df[self._index_df["id"] == article_id]
+        if rows.empty:
+            return None
+        publish_date_str = str(rows.iloc[0]["publish_date"])
+        year, month = int(publish_date_str[:4]), int(publish_date_str[5:7])
+        month_df = self.read_month(year, month)
+        article_rows = month_df[month_df["id"] == article_id]
+        if article_rows.empty:
+            return None
+        r = article_rows.iloc[0]
+        return {
+            "id": r["id"],
+            "url": r["url"],
+            "title": r["title"],
+            "text": r["text"],
+            "publish_date": r["publish_date"],
+            "source_name": r["source_name"],
+            "language": r["language"],
+            "tickers": r["tickers"],
+        }  # type: ignore[return-value]
+
     def article_ids(self) -> list[str]:
         """Return all article IDs from the in-memory index."""
         return self._index_df["id"].tolist()

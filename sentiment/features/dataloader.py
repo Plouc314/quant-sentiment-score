@@ -30,6 +30,10 @@ class FusedDataset(TypedDict):
     X_fundamental: np.ndarray
     """``(N, n_fund)`` fundamental snapshots at each window end date.
     Shape is ``(N, 0)`` when no fundamental data is provided."""
+    X_sentiment_probs: np.ndarray
+    """``(N, 3)`` daily FinBERT softmax probs at each window end date
+    — ``[P(pos), P(neg), P(neutral)]``.  Zero vector for days without news.
+    Shape is ``(N, 0)`` when no sentiment data is provided."""
     y: np.ndarray
     """``(N,)`` binary labels."""
     dates: np.ndarray
@@ -37,18 +41,20 @@ class FusedDataset(TypedDict):
 
 
 class FusedStockDataset(Dataset):
-    """PyTorch Dataset for (tech, sentiment, fundamental, target) tuples."""
+    """PyTorch Dataset for (tech, sentiment, fundamental, sentiment_probs, target) tuples."""
 
     def __init__(
         self,
         X_tech: np.ndarray,
         X_sentiment: np.ndarray,
         X_fundamental: np.ndarray,
+        X_sentiment_probs: np.ndarray,
         y: np.ndarray,
     ) -> None:
         self.X_tech = torch.tensor(X_tech, dtype=torch.float32)
         self.X_sentiment = torch.tensor(X_sentiment, dtype=torch.float32)
         self.X_fundamental = torch.tensor(X_fundamental, dtype=torch.float32)
+        self.X_sentiment_probs = torch.tensor(X_sentiment_probs, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.float32)
 
     def __len__(self) -> int:
@@ -56,15 +62,31 @@ class FusedStockDataset(Dataset):
 
     def __getitem__(
         self, i: int
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        return self.X_tech[i], self.X_sentiment[i], self.X_fundamental[i], self.y[i]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        return (
+            self.X_tech[i],
+            self.X_sentiment[i],
+            self.X_fundamental[i],
+            self.X_sentiment_probs[i],
+            self.y[i],
+        )
 
 
 def compute_targets(close: pd.Series) -> pd.Series:
     """Binary target for day *t*: ``1`` if ``close[t+2] > close[t-1]``, else ``0``.
 
-    Uses positional shifts so *t+2* and *t-1* refer to trading days.
-    The result has NaN at the first and last few entries.
+    The 3-day window models a next-day executable signal:
+
+    - ``t-1`` — yesterday's close: the last confirmed price available when a
+      signal is generated at end-of-day *t*
+    - ``t+2`` — two trading days forward: accounts for one day of signal
+      propagation / execution latency and one day of actual holding period
+
+    Concretely: a prediction at end of day *t* translates to
+    "buy at open of t+1, sell at close of t+2."
+
+    All shifts are positional (trading days, not calendar days).
+    NaN at the first row (no t-1) and last two rows (no t+2).
     """
     future = close.shift(-2)
     past = close.shift(1)
@@ -100,6 +122,39 @@ def align_sentiment(
         emb = lookup.get(ts.date())
         if emb is not None:
             result[i] = emb
+
+    return result
+
+
+def align_sentiment_probs(
+    index: pd.DatetimeIndex,
+    sentiment_df: pd.DataFrame | None,
+    ticker: str,
+) -> np.ndarray:
+    """Build ``(N, 3)`` array of daily FinBERT softmax probs aligned with *index*.
+
+    Each row is ``[P(positive), P(negative), P(neutral)]`` averaged over all
+    articles published on that date.  Zero vector for dates without news.
+    Returns ``(N, 0)`` when *sentiment_df* is ``None`` or has no
+    ``sentiment_probs`` column (backward-compatible with older pipeline output).
+    """
+    if sentiment_df is None or sentiment_df.empty or "sentiment_probs" not in sentiment_df.columns:
+        return np.zeros((len(index), 0), dtype=np.float32)
+
+    ticker_df = sentiment_df[sentiment_df["ticker"] == ticker]
+    if ticker_df.empty:
+        return np.zeros((len(index), 3), dtype=np.float32)
+
+    lookup: dict = {}
+    for _, row in ticker_df.iterrows():
+        dt = pd.Timestamp(row["date"]).date()
+        lookup[dt] = row["sentiment_probs"]
+
+    result = np.zeros((len(index), 3), dtype=np.float32)
+    for i, ts in enumerate(index):
+        probs = lookup.get(ts.date())
+        if probs is not None:
+            result[i] = probs
 
     return result
 
@@ -150,7 +205,7 @@ def build_dataset(
     technical: TechnicalFactors,
     sentiment_df: pd.DataFrame | None = None,
     ticker: str = "",
-    window: int = 20,
+    window: int = 64,
     fundamental_df: pd.DataFrame | None = None,
 ) -> FusedDataset:
     """Full pipeline: OHLCV → factors + targets + aligned sentiment/fundamentals → windows.
@@ -168,9 +223,9 @@ def build_dataset(
     window:
         Sliding window size in trading days.
     fundamental_df:
-        Output of ``FundamentalCache.load(ticker)`` — DatetimeIndex with
-        fundamental metric columns — or ``None`` to omit fundamentals.
-        When provided, each window uses the most recent snapshot on or before
+        Output of ``FundamentalCache.load_df(ticker)`` — DatetimeIndex'd
+        DataFrame with fundamental metric columns — or ``None`` to omit
+        fundamentals.  Each window uses the most recent snapshot on or before
         the window end date (forward-filled).
 
     Returns
@@ -183,6 +238,15 @@ def build_dataset(
     - ``y``             — ``(N,)`` binary labels
     - ``dates``         — ``(N,)`` date of last day in each window
     """
+    # Validate: SMA-60 warmup + window + 2 rows for target computation
+    min_rows = 60 + window + 2
+    if len(df) < min_rows:
+        raise RuntimeError(
+            f"Insufficient price history for ticker='{ticker}': need ≥ {min_rows} rows "
+            f"(60 indicator warmup + window={window} + 2 target rows), got {len(df)}. "
+            "Fetch more data before calling build_dataset."
+        )
+
     close = df["close"]
 
     # Compute targets on full series before dropping NaN from factors
@@ -194,11 +258,13 @@ def build_dataset(
     # Align targets and sentiment with factor dates
     targets = targets.reindex(factors_df.index)
     embeddings = align_sentiment(factors_df.index, sentiment_df, ticker)
+    sent_probs = align_sentiment_probs(factors_df.index, sentiment_df, ticker)
 
     # Drop rows where target is NaN (end of series — no future data)
     valid = targets.notna()
     factors_arr = factors_df[valid].values.astype(np.float32)
     embeddings_arr = embeddings[valid.values]
+    sent_probs_arr = sent_probs[valid.values]
     targets_arr = targets[valid].values.astype(np.float32)
     dates = factors_df.index[valid]
 
@@ -207,18 +273,22 @@ def build_dataset(
         factors_arr, embeddings_arr, targets_arr, dates, window
     )
 
-    # Align fundamentals to window end dates (one snapshot per window, no time dim)
+    # Align fundamentals and sentiment probs to window end dates (no time dim)
     X_fund = align_fundamentals(win_dates, fundamental_df)
+    X_sprob = _align_snapshot(win_dates, dates.values, sent_probs_arr)
 
     n_fund = X_fund.shape[1]
+    n_sprob = X_sprob.shape[1]
     logger.info(
-        "Built dataset: %d windows, %d tech factors, %d fundamental factors, window=%d",
-        len(y), factors_arr.shape[1], n_fund, window,
+        "Built dataset: %d windows, %d tech factors, %d fundamental factors, "
+        "%d sentiment prob features, window=%d",
+        len(y), factors_arr.shape[1], n_fund, n_sprob, window,
     )
     return {
         "X_tech": X_tech,
         "X_sentiment": X_sent,
         "X_fundamental": X_fund,
+        "X_sentiment_probs": X_sprob,
         "y": y,
         "dates": win_dates,
     }
@@ -277,11 +347,14 @@ def make_loaders(
         fund_scaler = StandardScaler()
         fund_scaler.fit(X_fund_all[splits["train"]])
 
+    X_sprob_all = dataset["X_sentiment_probs"]
+
     loaders = {}
     for name, sl in splits.items():
         X_tech = dataset["X_tech"][sl].copy()
         X_sent = dataset["X_sentiment"][sl]
         X_fund = X_fund_all[sl].copy()
+        X_sprob = X_sprob_all[sl]
         y = dataset["y"][sl]
 
         # Normalize technical factors
@@ -296,7 +369,8 @@ def make_loaders(
         if fund_scaler is not None:
             X_fund = fund_scaler.transform(X_fund).astype(np.float32)
 
-        ds = FusedStockDataset(X_tech, X_sent, X_fund, y)
+        # Sentiment probs are already in [0, 1] — no normalization needed
+        ds = FusedStockDataset(X_tech, X_sent, X_fund, X_sprob, y)
         loaders[name] = DataLoader(ds, batch_size=batch_size, shuffle=(name == "train"))
 
     logger.info(
@@ -311,6 +385,29 @@ def make_loaders(
 # ------------------------------------------------------------------
 # Private helpers
 # ------------------------------------------------------------------
+
+
+def _align_snapshot(
+    win_dates: np.ndarray,
+    all_dates: np.ndarray,
+    arr: np.ndarray,
+) -> np.ndarray:
+    """Pick the row from *arr* whose index in *all_dates* matches each window end date.
+
+    Used to align per-day snapshots (e.g. sentiment probs) to window end dates.
+    Returns ``(N_windows, arr.shape[1])`` — same number of features as *arr*.
+    Returns ``(N_windows, 0)`` when *arr* has no feature columns.
+    """
+    if arr.shape[1] == 0:
+        return np.zeros((len(win_dates), 0), dtype=np.float32)
+
+    date_to_idx = {d: i for i, d in enumerate(all_dates)}
+    out = np.zeros((len(win_dates), arr.shape[1]), dtype=np.float32)
+    for i, wd in enumerate(win_dates):
+        idx = date_to_idx.get(wd)
+        if idx is not None:
+            out[i] = arr[idx]
+    return out
 
 
 def _build_windows(

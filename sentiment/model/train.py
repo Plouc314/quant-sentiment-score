@@ -43,17 +43,19 @@ def train_model(
     lr: float = 1e-3,
     patience: int = 15,
     device: str = "cpu",
+    seed: int | None = None,
+    pos_weight: float | None = None,
 ) -> dict[str, Any]:
     """Train with early stopping on validation AUC.
 
     Parameters
     ----------
     model:
-        A model whose ``forward(tech, sentiment, fundamentals)`` returns logits
-        ``(batch, 1)``.  ``fundamentals`` may be an empty tensor when the model
-        has ``n_fundamentals=0``.
+        A model whose ``forward(tech, sentiment, fundamentals, sentiment_probs)``
+        returns logits ``(batch, 1)``.
     train_loader, val_loader:
-        DataLoaders yielding ``(tech, sentiment, fundamentals, target)`` batches.
+        DataLoaders yielding ``(tech, sentiment, fundamentals, sentiment_probs,
+        target)`` batches.
     n_epochs:
         Maximum training epochs.
     lr:
@@ -62,6 +64,14 @@ def train_model(
         Stop after this many epochs without validation AUC improvement.
     device:
         ``"cpu"`` or ``"cuda"``.
+    seed:
+        Optional random seed for reproducibility.  Seeds both PyTorch and CUDA
+        at the start of training.
+    pos_weight:
+        Optional weight for the positive class in ``BCEWithLogitsLoss``.
+        Set to ``n_negative / n_positive`` when the dataset is imbalanced to
+        prevent the model from predicting the majority class.  ``None`` means
+        equal weighting.
 
     Returns
     -------
@@ -69,12 +79,22 @@ def train_model(
     ``val_accuracy`` lists) and ``best_epoch``, ``best_val_auc``.
     The model weights are restored to the best checkpoint.
     """
+    if seed is not None:
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+
     model = model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode="max", factor=0.5, patience=5
     )
-    criterion = nn.BCEWithLogitsLoss()
+    weight = (
+        torch.tensor([pos_weight], dtype=torch.float32, device=device)
+        if pos_weight is not None
+        else None
+    )
+    criterion = nn.BCEWithLogitsLoss(pos_weight=weight)
 
     best_auc = 0.0
     best_epoch = 0
@@ -256,6 +276,36 @@ def bootstrap_evaluate(
 
 
 # ------------------------------------------------------------------
+# Public prediction collection
+# ------------------------------------------------------------------
+
+
+def collect_predictions(
+    model: nn.Module,
+    loader: DataLoader,
+    device: str = "cpu",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Collect all model predictions on *loader* in a single forward pass.
+
+    Parameters
+    ----------
+    model:
+        Trained model.
+    loader:
+        DataLoader yielding ``(tech, sentiment, fundamentals, sentiment_probs, target)``
+        batches.
+    device:
+        ``"cpu"`` or ``"cuda"``.
+
+    Returns
+    -------
+    ``(probs, targets)`` — float32 arrays of shape ``(N,)``.
+    """
+    probs, targets, _ = _collect_predictions(model, loader, device)
+    return probs, targets
+
+
+# ------------------------------------------------------------------
 # Private helpers
 # ------------------------------------------------------------------
 
@@ -277,13 +327,14 @@ def _collect_predictions(
     total_loss = 0.0
 
     with torch.no_grad():
-        for tech, sentiment, fundamentals, targets in loader:
+        for tech, sentiment, fundamentals, sentiment_probs, targets in loader:
             tech = tech.to(device)
             sentiment = sentiment.to(device)
             fundamentals = fundamentals.to(device)
+            sentiment_probs = sentiment_probs.to(device)
             targets = targets.to(device)
 
-            logits = model(tech, sentiment, fundamentals)
+            logits = model(tech, sentiment, fundamentals, sentiment_probs)
 
             if criterion is not None:
                 total_loss += criterion(logits, targets.unsqueeze(1)).item() * len(targets)
@@ -309,14 +360,15 @@ def _train_epoch(
     total_loss = 0.0
     n_samples = 0
 
-    for tech, sentiment, fundamentals, targets in loader:
+    for tech, sentiment, fundamentals, sentiment_probs, targets in loader:
         tech = tech.to(device)
         sentiment = sentiment.to(device)
         fundamentals = fundamentals.to(device)
+        sentiment_probs = sentiment_probs.to(device)
         targets = targets.to(device)
 
         optimizer.zero_grad()
-        logits = model(tech, sentiment, fundamentals)
+        logits = model(tech, sentiment, fundamentals, sentiment_probs)
         loss = criterion(logits, targets.unsqueeze(1))
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
