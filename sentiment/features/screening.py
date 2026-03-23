@@ -70,17 +70,9 @@ def apply_momentum_gate(
 
     Notes
     -----
-    This is a **hard inference-time gate** (option A): predictions for
-    downtrend windows are discarded without the model having seen the slope
-    signal during training.
-
-    Future enhancements
-    -------------------
-    - **Option B** — feed ``momentum_slope()`` as a scalar feature via
-      ``build_dataset(include_momentum_slope=True)`` so the model learns
-      *when* trend context is informative, including genuine reversal signals.
-    - **Option C** — train separate models per regime (uptrend / downtrend)
-      for full specialisation at the cost of halved training data per model.
+    This is a hard inference-time gate: predictions for downtrend windows are
+    discarded without the model having seen the slope signal during training.
+    See ``docs/design.md`` for alternative approaches.
     """
     slopes = np.array(
         [_slope_at(closes, pd.Timestamp(d), window) for d in win_dates],
