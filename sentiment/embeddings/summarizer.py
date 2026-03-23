@@ -20,26 +20,39 @@ class Summarizer:
     Defaults to ``facebook/bart-large-cnn``; pass any HuggingFace seq2seq model
     name (e.g. ``human-centered-summarization/financial-summarization-pegasus``)
     to swap the backbone without changing any other code.
+
+    Pass ``model_name=None`` for a no-op summarizer that returns text unchanged.
+    In this mode no model is loaded and :meth:`summarize` simply returns its
+    input — useful for downstream AUC evaluation where you want to measure the
+    baseline of feeding raw (FinBERT-truncated) text directly to the encoder.
     """
 
     def __init__(
         self,
         device: str = "cpu",
-        model_name: str = "facebook/bart-large-cnn",
+        model_name: str | None = "facebook/bart-large-cnn",
     ) -> None:
         self.device = torch.device(device)
-        self._tok = AutoTokenizer.from_pretrained(model_name)
-        self._model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
-        self._model.eval().to(self.device)
+        self._noop = model_name is None
+        if not self._noop:
+            self._tok = AutoTokenizer.from_pretrained(model_name)
+            self._model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+            self._model.eval().to(self.device)
 
     def summarize(self, content: str) -> str:
-        """Compress article content via BART-CNN.
+        """Compress article content to a summary suitable for FinBERT encoding.
 
         If the content is already short enough for FinBERT (≤ 512 tokens),
         summarization is skipped and the content is returned as-is.
+
+        When the summarizer was constructed with ``model_name=None`` the input
+        is always returned unchanged (FinBERT will truncate at 512 tokens).
         """
         if not content or not content.strip():
             return ""
+
+        if self._noop:
+            return content
 
         # Short-content bypass: use BART tokenizer as a proxy for FinBERT length.
         # BART and FinBERT tokenizers produce similar token counts for financial
