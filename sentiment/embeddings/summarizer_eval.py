@@ -9,8 +9,11 @@ from typing import TYPE_CHECKING, Any, Callable
 import pandas as pd
 from rouge_score import rouge_scorer
 
+from ..features.dataloader import build_dataset, make_loaders
+from ..model import SentimentLSTM, bootstrap_evaluate, train_model
 from ..sources.news.models import Article
 from .encoder import SentimentEncoder
+from .pipeline import SentimentPipeline
 from .summarizer import Summarizer
 
 if TYPE_CHECKING:
@@ -143,11 +146,6 @@ def evaluate_downstream_auc(
     - ``best_val_auc`` — best validation AUC during training
     - ``n_test_samples`` — number of test windows evaluated
     """
-    # Lazy imports avoid circular dependencies and keep module load fast
-    from ..features.dataloader import build_dataset, make_loaders
-    from ..model import SentimentLSTM, bootstrap_evaluate, train_model
-    from .pipeline import SentimentPipeline
-
     logger.info(
         "evaluate_downstream_auc: summarizer_model=%s  ticker=%s",
         summarizer_model,
