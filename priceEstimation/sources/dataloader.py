@@ -43,7 +43,7 @@ def compute_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     - ``volume_ratio``      — volume / rolling_20_mean(volume)
     - ``trade_count_ratio`` — trade_count / rolling_20_mean(trade_count);
                               zero-filled when ``trade_count`` column is absent
-    - ``vwap_dev``          — (vwap - close) / close
+    - ``vwap_dev``          — (vwap - close) / close; zero-filled when ``vwap`` column is absent
 
     Returns
     -------
@@ -66,7 +66,10 @@ def compute_features(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     else:
         feat["trade_count_ratio"] = 0.0
 
-    feat["vwap_dev"] = (df["vwap"] - df["close"]) / df["close"]
+    if "vwap" in df.columns:
+        feat["vwap_dev"] = (df["vwap"] - df["close"]) / df["close"]
+    else:
+        feat["vwap_dev"] = 0.0
 
     # Target: the log_return of the *next* bar
     target = feat["log_return"].shift(-1)
