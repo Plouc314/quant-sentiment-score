@@ -164,7 +164,7 @@ def evaluate_downstream_auc(
     )
 
     n_fund = dataset["X_fundamental"].shape[1]
-    n_sprob = dataset["X_sentiment_probs"].shape[1]
+    n_sprob = dataset["X_sentiment_probs"].shape[2]
 
     train_loader, val_loader, test_loader, _, _ = make_loaders(dataset)
     model = SentimentLSTM(n_fundamentals=n_fund, n_sentiment_probs=n_sprob)

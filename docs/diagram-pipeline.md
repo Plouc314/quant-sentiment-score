@@ -50,9 +50,9 @@
                                                           date index          date index
                                                           zero if no news     zero if no news
                                                                   │               │
-                                                          sliding window      snapshot at
-                                                          size=64, stride=1   window end date ──► X_sentiment_probs
-                                                                  │                                (N, 3)
+                                                          sliding window      sliding window
+                                                          size=64, stride=1   size=64, stride=1 ──► X_sentiment_probs
+                                                                  │                                  (N, 64, 3)
                                                                   ▼
                                                               X_sentiment
                                                               (N, 64, 768)
@@ -80,11 +80,12 @@
   X_sentiment       │  │  X_sentiment (N,64,768) ──────────────────► (N, 64, 16)    │   │
   (N, 64, 768) ─────┼─►│                                                    │        │   │
                     │  │                                            concat on feat   │   │
-                    │  │  X_tech (N, 64, 16) ───────────────────────────── │        │   │
+  X_sentiment_probs │  │  X_tech (N, 64, 16) ───────────────────────────── │        │   │
+  (N, 64, 3) ───────┼─►│  X_sentiment_probs (N, 64, 3) ─────────────────── │        │   │
                     │  │                                                    ▼        │   │
-                    │  │                                           (N, 64, 32)       │   │
+                    │  │                                           (N, 64, 35)       │   │
                     │  │                                                    │        │   │
-                    │  │                                  LSTM(input=32, hidden=32)  │   │
+                    │  │                                  LSTM(input=35, hidden=32)  │   │
                     │  │                                  2 layers, dropout=0.2      │   │
                     │  │                                  reads days 1→64 in order   │   │
                     │  │                                                    │        │   │
@@ -95,10 +96,9 @@
   X_fundamental     │                                          concat                     │
   (N, 10) ──────────┼──────────────────────────────────────────── │                     │
                     │                                              ▼                      │
-  X_sentiment_probs │                                        (N, 32+10+3 = 45)           │
-  (N, 3) ───────────┼──────────────────────────────────────────── │                     │
+                    │                                        (N, 32+10 = 42)             │
                     │                                              ▼                      │
-                    │                          classifier: Linear(45→32) → ReLU          │
+                    │                          classifier: Linear(42→32) → ReLU          │
                     │                                      → Dropout(0.2)                 │
                     │                                      → BatchNorm1d                  │
                     │                                      → Linear(32→1)                 │
@@ -113,11 +113,12 @@
   X_sentiment       │  │  X_sentiment (N,64,768) ──────────────────► (N, 64, 16)    │   │
   (N, 64, 768) ─────┼─►│                                                    │        │   │
                     │  │                                            concat on feat   │   │
-                    │  │  X_tech (N, 64, 16) ───────────────────────────── │        │   │
+  X_sentiment_probs │  │  X_tech (N, 64, 16) ───────────────────────────── │        │   │
+  (N, 64, 3) ───────┼─►│  X_sentiment_probs (N, 64, 3) ─────────────────── │        │   │
                     │  │                                                    ▼        │   │
-                    │  │                                           (N, 64, 32)       │   │
+                    │  │                                           (N, 64, 35)       │   │
                     │  │                                                    │        │   │
-                    │  │                           input_proj: Linear(32 → 64)       │   │
+                    │  │                           input_proj: Linear(35 → 64)       │   │
                     │  │                                           (N, 64, 64)       │   │
                     │  │                                                    │        │   │
                     │  │                        + pos_embedding [0..63]              │   │
@@ -138,10 +139,9 @@
   X_fundamental     │                                          concat                     │
   (N, 10) ──────────┼──────────────────────────────────────────── │                     │
                     │                                              ▼                      │
-  X_sentiment_probs │                                       (N, 64+10+3 = 77)            │
-  (N, 3) ───────────┼──────────────────────────────────────────── │                     │
+                    │                                       (N, 64+10 = 74)              │
                     │                                              ▼                      │
-                    │                            classifier: Linear(77 → 1)              │
+                    │                            classifier: Linear(74 → 1)              │
                     │                                                                     │
                     └──────────────────────────────────────────────┼──────────────────────┘
                                                                    │
@@ -167,6 +167,6 @@
 ## Notes
 
 - **N** = number of windows = (trading days − 60 warmup − window − 2), where 60 is the SMA-60 lookback and 2 is for the target computation
-- The **LSTM summary is 32 numbers**, the **Transformer summary is 64** (`d_model`), so their classifier inputs differ (45 vs 77) but the final output shape is identical
-- `X_sentiment_probs` is a **snapshot** (last day of window only), while `X_sentiment` is the full **64-day sequence** — both come from FinBERT but serve different roles in the model
+- The **LSTM summary is 32 numbers**, the **Transformer summary is 64** (`d_model`), so their classifier inputs differ (42 vs 74) but the final output shape is identical
+- `X_sentiment_probs` is a **64-day sequence** (same window as `X_sentiment`), concatenated with tech and projected sentiment before the temporal model — both come from FinBERT and capture temporal sentiment dynamics
 - The **momentum gate** is an optional post-inference filter (option A from `design.md`) — it runs after the model, not inside it

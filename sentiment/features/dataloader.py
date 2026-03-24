@@ -32,9 +32,9 @@ class FusedDataset(TypedDict):
     """``(N, n_fund)`` fundamental snapshots at each window end date.
     Shape is ``(N, 0)`` when no fundamental data is provided."""
     X_sentiment_probs: np.ndarray
-    """``(N, 3)`` daily FinBERT softmax probs at each window end date
+    """``(N, window, 3)`` daily FinBERT softmax probs over the rolling window
     — ``[P(pos), P(neg), P(neutral)]``.  Zero vector for days without news.
-    Shape is ``(N, 0)`` when no sentiment data is provided."""
+    Shape is ``(N, window, 0)`` when no sentiment data is provided."""
     y: np.ndarray
     """``(N,)`` binary labels."""
     dates: np.ndarray
@@ -263,8 +263,9 @@ def build_dataset(
     - ``X_fundamental``      — ``(N, n_fund [+ 1 if include_momentum_slope])`` fundamental
       snapshots; ``(N, 0)`` only when both *fundamental_df* is ``None`` and
       *include_momentum_slope* is ``False``
-    - ``X_sentiment_probs``  — ``(N, 3)`` daily FinBERT softmax probs at each window end
-      date; ``(N, 0)`` when *sentiment_df* is ``None`` or has no ``sentiment_probs`` column
+    - ``X_sentiment_probs``  — ``(N, window, 3)`` daily FinBERT softmax probs over the
+      rolling window; ``(N, window, 0)`` when *sentiment_df* is ``None`` or has no
+      ``sentiment_probs`` column
     - ``y``                  — ``(N,)`` binary labels
     - ``dates``              — ``(N,)`` date of last day in each window
     """
@@ -303,14 +304,13 @@ def build_dataset(
     if include_momentum_slope:
         close_arr = close.reindex(factors_df.index).ffill()[valid].values.astype(np.float64)
 
-    # Build sliding windows over tech + sentiment
-    X_tech, X_sent, y, win_dates = _build_windows(
-        factors_arr, embeddings_arr, targets_arr, dates, window
+    # Build sliding windows over tech + sentiment + sentiment probs
+    X_tech, X_sent, X_sprob, y, win_dates = _build_windows(
+        factors_arr, embeddings_arr, sent_probs_arr, targets_arr, dates, window
     )
 
-    # Align fundamentals and sentiment probs to window end dates (no time dim)
+    # Align fundamentals to window end dates (no time dim)
     X_fund = align_fundamentals(win_dates, fundamental_df)
-    X_sprob = _align_snapshot(win_dates, dates.values, sent_probs_arr)
 
     # Append momentum slope as an extra fundamental-style scalar feature.
     # Uses the last min(20, window) closes of each window so the model can learn
@@ -326,7 +326,7 @@ def build_dataset(
         X_fund = np.concatenate([X_fund, slopes], axis=1)
 
     n_fund = X_fund.shape[1]
-    n_sprob = X_sprob.shape[1]
+    n_sprob = X_sprob.shape[2]
     logger.info(
         "Built dataset: %d windows, %d tech factors, %d fundamental factors "
         "(%s momentum slope), %d sentiment prob features, window=%d",
@@ -437,40 +437,24 @@ def make_loaders(
 # ------------------------------------------------------------------
 
 
-def _align_snapshot(
-    win_dates: np.ndarray,
-    all_dates: np.ndarray,
-    arr: np.ndarray,
-) -> np.ndarray:
-    """Pick the row from *arr* whose index in *all_dates* matches each window end date.
-
-    Used to align per-day snapshots (e.g. sentiment probs) to window end dates.
-    Returns ``(N_windows, arr.shape[1])`` — same number of features as *arr*.
-    Returns ``(N_windows, 0)`` when *arr* has no feature columns.
-    """
-    if arr.shape[1] == 0:
-        return np.zeros((len(win_dates), 0), dtype=np.float32)
-
-    date_to_idx = {d: i for i, d in enumerate(all_dates)}
-    out = np.zeros((len(win_dates), arr.shape[1]), dtype=np.float32)
-    for i, wd in enumerate(win_dates):
-        idx = date_to_idx.get(wd)
-        if idx is not None:
-            out[i] = arr[idx]
-    return out
-
-
 def _build_windows(
     factors: np.ndarray,
     embeddings: np.ndarray,
+    sent_probs: np.ndarray,
     targets: np.ndarray,
     dates: pd.DatetimeIndex,
     window: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Create sliding windows from aligned arrays.
 
     For each window ``[i, ..., i+window-1]``, the target is the target
     of the last day (index ``i+window-1``).
+
+    Parameters
+    ----------
+    sent_probs:
+        ``(M, 3)`` daily FinBERT softmax probs, or ``(M, 0)`` when disabled.
+        Windowed to ``(N, window, 3)`` or ``(N, window, 0)`` respectively.
     """
     n = len(targets) - window + 1
     if n <= 0:
@@ -483,7 +467,12 @@ def _build_windows(
     X_tech = sliding_window_view(factors, window, axis=0).transpose(0, 2, 1).copy()
     X_sent = sliding_window_view(embeddings, window, axis=0).transpose(0, 2, 1).copy()
 
+    if sent_probs.shape[1] == 0:
+        X_sprob = np.zeros((n, window, 0), dtype=np.float32)
+    else:
+        X_sprob = sliding_window_view(sent_probs, window, axis=0).transpose(0, 2, 1).copy()
+
     y = targets[window - 1 :]
     win_dates = dates[window - 1 :].values
 
-    return X_tech, X_sent, y, win_dates
+    return X_tech, X_sent, X_sprob, y, win_dates
