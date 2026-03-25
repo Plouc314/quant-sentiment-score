@@ -166,7 +166,7 @@
 
 ## Notes
 
-- **N** = number of windows = (trading days − 60 warmup − window − 2), where 60 is the SMA-60 lookback and 2 is for the target computation
+- **N** = number of windows = (trading days − 60 warmup − window − 2 + 1), where 60 is the SMA-60 lookback, 2 is for the target computation, and +1 accounts for the inclusive sliding window count
 - The **LSTM summary is 32 numbers**, the **Transformer summary is 64** (`d_model`), so their classifier inputs differ (42 vs 74) but the final output shape is identical
 - `X_sentiment_probs` is a **64-day sequence** (same window as `X_sentiment`), concatenated with tech and projected sentiment before the temporal model — both come from FinBERT and capture temporal sentiment dynamics
 - The **momentum gate** is an optional post-inference filter (option A from `design.md`) — it runs after the model, not inside it

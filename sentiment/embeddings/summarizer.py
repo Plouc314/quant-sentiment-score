@@ -3,15 +3,14 @@ from __future__ import annotations
 import torch
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
+from .encoder import _FINBERT_MAX_LENGTH
+
 # BART-CNN generation defaults (from summarization.ipynb POC)
 _BART_MAX_INPUT = 1024
 _BART_MAX_OUTPUT = 128
 _BART_MIN_OUTPUT = 30
 _BART_NUM_BEAMS = 4
 _BART_LENGTH_PENALTY = 2.0
-
-# FinBERT tokenisation limit (used for short-content bypass)
-_FINBERT_MAX_LENGTH = 512
 
 
 class Summarizer:

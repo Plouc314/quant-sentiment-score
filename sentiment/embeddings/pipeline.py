@@ -149,13 +149,19 @@ def aggregate_daily(df: pd.DataFrame) -> pd.DataFrame:
         .reset_index()
     )
 
-    # Aggregate array columns separately and merge
+    # Aggregate array columns separately and merge.
+    # Explode each array column into a numeric DataFrame, apply groupby().mean()
+    # (stable across all pandas versions), then repack into a list column.
     for col in [c for c in ["embedding", "sentiment_probs"] if c in df.columns]:
-        arr_agg = (
-            df.groupby(["ticker", "date"])[col]
-            .apply(lambda x: np.mean(np.stack(x.values), axis=0))
-            .reset_index(name=col)
+        arr = np.stack(df[col].values)                        # (M, D)
+        arr_df = pd.DataFrame(arr, index=df.index)
+        means = (
+            arr_df.groupby([df["ticker"], df["date"]])
+            .mean()
+            .reset_index()
         )
-        agg = agg.merge(arr_agg, on=["ticker", "date"])
+        means[col] = list(means.iloc[:, 2:].values.astype(np.float32))
+        means = means[["ticker", "date", col]]
+        agg = agg.merge(means, on=["ticker", "date"])
 
     return agg

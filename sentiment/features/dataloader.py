@@ -421,7 +421,7 @@ def make_loaders(
 
         # Sentiment probs are already in [0, 1] — no normalization needed
         ds = FusedStockDataset(X_tech, X_sent, X_fund, X_sprob, y)
-        loaders[name] = DataLoader(ds, batch_size=batch_size, shuffle=(name == "train"))
+        loaders[name] = DataLoader(ds, batch_size=batch_size, shuffle=(name == "train"), drop_last=(name == "train"))
 
     logger.info(
         "Split sizes — train: %d, val: %d, test: %d",
