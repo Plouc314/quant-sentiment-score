@@ -28,7 +28,7 @@ class SentimentPipeline:
         self,
         device: str = "cpu",
         encoder_model: str = "ProsusAI/finbert",
-        summarizer_model: str = "facebook/bart-large-cnn",
+        summarizer_model: str | None = "facebook/bart-large-cnn",
     ) -> None:
         self.summarizer = Summarizer(device, summarizer_model)
         self.encoder = SentimentEncoder(device, encoder_model)
@@ -52,7 +52,7 @@ class SentimentPipeline:
             logger.warning("Article has no title or content — returning zero embedding")
             return {
                 "summary": "",
-                "label": 0.0,
+                "label": 0.5,
                 "embedding": np.zeros(_EMBEDDING_DIM, dtype=np.float32),
                 "sentiment_probs": np.zeros(_N_SENTIMENT_PROBS, dtype=np.float32),
             }
@@ -73,10 +73,10 @@ class SentimentPipeline:
             try:
                 result = self.process_article(article)
             except Exception:
-                logger.exception("Failed to process article %d — skipping", i)
+                logger.exception("Failed to process article %d — using neutral fallback", i)
                 result = {
                     "summary": "",
-                    "label": 0.0,
+                    "label": 0.5,
                     "embedding": np.zeros(_EMBEDDING_DIM, dtype=np.float32),
                     "sentiment_probs": np.zeros(_N_SENTIMENT_PROBS, dtype=np.float32),
                 }
@@ -106,9 +106,13 @@ class SentimentPipeline:
                 rows.append(
                     {
                         "ticker": ticker,
-                        "date": article["publish_date"].isoformat()
-                        if not isinstance(article["publish_date"], str)
-                        else article["publish_date"],
+                        "date": (
+                            article["publish_date"]
+                            if isinstance(article["publish_date"], str)
+                            else article["publish_date"].isoformat()
+                            if article["publish_date"] is not None
+                            else ""
+                        ),
                         "label": result["label"],
                         "embedding": result["embedding"],
                         "sentiment_probs": result["sentiment_probs"],

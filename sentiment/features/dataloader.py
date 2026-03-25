@@ -14,6 +14,7 @@ from torch.utils.data import DataLoader, Dataset
 from typing import TypedDict
 
 from .technical import TechnicalFactors
+from .screening import momentum_slope
 
 logger = logging.getLogger(__name__)
 
@@ -114,11 +115,11 @@ def align_sentiment(
 
     # Build date → embedding lookup for O(N+M) alignment
     lookup: dict = {}
-    for _, row in ticker_df.iterrows():
-        dt = pd.Timestamp(row["date"]).date()
+    for dt_raw, emb in zip(ticker_df["date"], ticker_df["embedding"]):
+        dt = pd.Timestamp(dt_raw).date()
         if dt in lookup:
             logger.warning("align_sentiment: duplicate date %s for ticker %s — keeping last row", dt, ticker)
-        lookup[dt] = row["embedding"]
+        lookup[dt] = emb
 
     for i, ts in enumerate(index):
         emb = lookup.get(ts.date())
@@ -156,11 +157,11 @@ def align_sentiment_probs(
         return np.zeros((len(index), 3), dtype=np.float32)
 
     lookup: dict = {}
-    for _, row in ticker_df.iterrows():
-        dt = pd.Timestamp(row["date"]).date()
+    for dt_raw, probs in zip(ticker_df["date"], ticker_df["sentiment_probs"]):
+        dt = pd.Timestamp(dt_raw).date()
         if dt in lookup:
             logger.warning("align_sentiment_probs: duplicate date %s for ticker %s — keeping last row", dt, ticker)
-        lookup[dt] = row["sentiment_probs"]
+        lookup[dt] = probs
 
     result = np.zeros((len(index), 3), dtype=np.float32)
     for i, ts in enumerate(index):
@@ -219,6 +220,7 @@ def build_dataset(
     ticker: str = "",
     window: int = 64,
     fundamental_df: pd.DataFrame | None = None,
+    include_momentum_slope: bool = True,
 ) -> FusedDataset:
     """Full pipeline: OHLCV → factors + targets + aligned sentiment/fundamentals → windows.
 
@@ -239,16 +241,32 @@ def build_dataset(
         DataFrame with fundamental metric columns — or ``None`` to omit
         fundamentals.  Each window uses the most recent snapshot on or before
         the window end date (forward-filled).
+    include_momentum_slope:
+        When ``True`` (default), appends the 20-day linear-regression slope of
+        closing prices as an extra scalar in ``X_fundamental``.  The slope is
+        computed over the last ``min(20, window)`` closes of each window so the
+        model can learn whether trend context improves predictions — rather than
+        applying a hard gate at inference.  The value is in raw price units and
+        is normalised by ``make_loaders`` together with the other fundamental
+        features.
+
+        Set to ``False`` to reproduce results without the momentum feature, or
+        when comparing against the hard inference-time gate implemented in
+        :func:`~sentiment.features.screening.apply_momentum_gate`.
 
     Returns
     -------
     Dict with keys:
 
-    - ``X_tech``        — ``(N, window, 16)`` technical factor windows
-    - ``X_sentiment``   — ``(N, window, 768)`` sentiment embedding windows
-    - ``X_fundamental`` — ``(N, n_fund)`` fundamental snapshots; ``(N, 0)`` if omitted
-    - ``y``             — ``(N,)`` binary labels
-    - ``dates``         — ``(N,)`` date of last day in each window
+    - ``X_tech``             — ``(N, window, 16)`` technical factor windows
+    - ``X_sentiment``        — ``(N, window, 768)`` sentiment embedding windows
+    - ``X_fundamental``      — ``(N, n_fund [+ 1 if include_momentum_slope])`` fundamental
+      snapshots; ``(N, 0)`` only when both *fundamental_df* is ``None`` and
+      *include_momentum_slope* is ``False``
+    - ``X_sentiment_probs``  — ``(N, 3)`` daily FinBERT softmax probs at each window end
+      date; ``(N, 0)`` when *sentiment_df* is ``None`` or has no ``sentiment_probs`` column
+    - ``y``                  — ``(N,)`` binary labels
+    - ``dates``              — ``(N,)`` date of last day in each window
     """
     # Validate: SMA-60 warmup + window + 2 rows for target computation
     min_rows = 60 + window + 2
@@ -280,6 +298,11 @@ def build_dataset(
     targets_arr = targets[valid].values.astype(np.float32)
     dates = factors_df.index[valid]
 
+    # Align close prices to factor dates for momentum slope computation
+    close_arr: np.ndarray | None = None
+    if include_momentum_slope:
+        close_arr = close.reindex(factors_df.index).ffill()[valid].values.astype(np.float64)
+
     # Build sliding windows over tech + sentiment
     X_tech, X_sent, y, win_dates = _build_windows(
         factors_arr, embeddings_arr, targets_arr, dates, window
@@ -289,12 +312,27 @@ def build_dataset(
     X_fund = align_fundamentals(win_dates, fundamental_df)
     X_sprob = _align_snapshot(win_dates, dates.values, sent_probs_arr)
 
+    # Append momentum slope as an extra fundamental-style scalar feature.
+    # Uses the last min(20, window) closes of each window so the model can learn
+    # whether trend context improves predictions rather than applying a hard gate.
+    if include_momentum_slope and close_arr is not None:
+        slope_len = min(20, window)
+        xs = np.arange(slope_len)
+        slopes = np.array(
+            [np.polyfit(xs, close_arr[i + window - slope_len : i + window], 1)[0]
+             for i in range(len(y))],
+            dtype=np.float32,
+        ).reshape(-1, 1)
+        X_fund = np.concatenate([X_fund, slopes], axis=1)
+
     n_fund = X_fund.shape[1]
     n_sprob = X_sprob.shape[1]
     logger.info(
-        "Built dataset: %d windows, %d tech factors, %d fundamental factors, "
-        "%d sentiment prob features, window=%d",
-        len(y), factors_arr.shape[1], n_fund, n_sprob, window,
+        "Built dataset: %d windows, %d tech factors, %d fundamental factors "
+        "(%s momentum slope), %d sentiment prob features, window=%d",
+        len(y), factors_arr.shape[1], n_fund,
+        "incl." if include_momentum_slope else "excl.",
+        n_sprob, window,
     )
     return {
         "X_tech": X_tech,
