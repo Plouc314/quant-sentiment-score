@@ -432,6 +432,107 @@ def make_loaders(
     return loaders["train"], loaders["val"], loaders["test"], tech_scaler, fund_scaler
 
 
+def make_loaders_multi(
+    datasets: list[tuple[str, FusedDataset]],
+    cutoffs: dict[str, pd.Timestamp],
+    val_months: int = 2,
+    batch_size: int = 32,
+) -> tuple[DataLoader, DataLoader, DataLoader, StandardScaler, StandardScaler | None]:
+    """Per-symbol temporal split with staggered cutoffs, then normalize and create DataLoaders.
+
+    For each symbol the split is:
+
+    - **test**  — ``date >= cutoffs[symbol]``
+    - **val**   — ``cutoffs[symbol] - val_months months <= date < cutoffs[symbol]``
+    - **train** — ``date < cutoffs[symbol] - val_months months``
+
+    All train windows across symbols are concatenated to fit the scalers.
+    The old :func:`make_loaders` is kept for single-symbol use.
+
+    Parameters
+    ----------
+    datasets:
+        List of ``(symbol, FusedDataset)`` pairs from :func:`build_dataset`.
+    cutoffs:
+        Per-symbol ``pd.Timestamp`` train/test boundary (from ``splits.yml``).
+    val_months:
+        Calendar months immediately before each cutoff reserved for validation.
+    batch_size:
+        Batch size for all three DataLoaders.
+
+    Returns
+    -------
+    ``(train_loader, val_loader, test_loader, tech_scaler, fund_scaler)``
+
+    ``fund_scaler`` is ``None`` when no fundamental features are present.
+    """
+    train_parts: dict[str, list[np.ndarray]] = {k: [] for k in ("tech", "sent", "fund", "sprob", "y")}
+    val_parts:   dict[str, list[np.ndarray]] = {k: [] for k in ("tech", "sent", "fund", "sprob", "y")}
+    test_parts:  dict[str, list[np.ndarray]] = {k: [] for k in ("tech", "sent", "fund", "sprob", "y")}
+
+    for symbol, ds in datasets:
+        cutoff = cutoffs[symbol]
+        val_start = cutoff - pd.DateOffset(months=val_months)
+        dates = pd.DatetimeIndex(ds["dates"])
+
+        train_mask = dates < val_start
+        val_mask   = (dates >= val_start) & (dates < cutoff)
+        test_mask  = dates >= cutoff
+
+        for mask, parts in ((train_mask, train_parts), (val_mask, val_parts), (test_mask, test_parts)):
+            idx = np.asarray(mask)
+            parts["tech"].append(ds["X_tech"][idx])
+            parts["sent"].append(ds["X_sentiment"][idx])
+            parts["fund"].append(ds["X_fundamental"][idx])
+            parts["sprob"].append(ds["X_sentiment_probs"][idx])
+            parts["y"].append(ds["y"][idx])
+
+    def _concat(parts: dict[str, list[np.ndarray]]) -> dict[str, np.ndarray]:
+        return {k: np.concatenate(v, axis=0) for k, v in parts.items() if v}
+
+    train = _concat(train_parts)
+    val   = _concat(val_parts)
+    test  = _concat(test_parts)
+
+    for split_name, split in (("train", train), ("val", val), ("test", test)):
+        logger.info("make_loaders_multi — %s: %d windows", split_name, len(split["y"]))
+
+    # Fit scalers on training data only
+    X_train_tech = train["tech"]
+    n_samples, win, n_feat = X_train_tech.shape
+    tech_scaler = StandardScaler()
+    tech_scaler.fit(X_train_tech.reshape(-1, n_feat))
+
+    n_fund = train["fund"].shape[1]
+    fund_scaler: StandardScaler | None = None
+    if n_fund > 0:
+        fund_scaler = StandardScaler()
+        fund_scaler.fit(train["fund"])
+
+    loaders = {}
+    for name, split in (("train", train), ("val", val), ("test", test)):
+        X_tech = split["tech"].copy()
+        n, w, f = X_tech.shape
+        X_tech = (
+            tech_scaler.transform(X_tech.reshape(-1, f))
+            .reshape(n, w, f)
+            .astype(np.float32)
+        )
+        X_fund = split["fund"].copy()
+        if fund_scaler is not None:
+            X_fund = fund_scaler.transform(X_fund).astype(np.float32)
+
+        ds_torch = FusedStockDataset(X_tech, split["sent"], X_fund, split["sprob"], split["y"])
+        loaders[name] = DataLoader(
+            ds_torch,
+            batch_size=batch_size,
+            shuffle=(name == "train"),
+            drop_last=(name == "train"),
+        )
+
+    return loaders["train"], loaders["val"], loaders["test"], tech_scaler, fund_scaler
+
+
 # ------------------------------------------------------------------
 # Private helpers
 # ------------------------------------------------------------------
