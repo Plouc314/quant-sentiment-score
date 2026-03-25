@@ -8,9 +8,8 @@ import logging
 import numpy as np
 import pandas as pd
 import torch
-from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.preprocessing import StandardScaler
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import ConcatDataset, DataLoader, Dataset
 from typing import TypedDict
 
 from .technical import TechnicalFactors
@@ -22,54 +21,97 @@ EMBEDDING_DIM = 768
 
 
 class FusedDataset(TypedDict):
-    """Output of :func:`build_dataset`."""
+    """Output of :func:`build_dataset`.
+
+    Time-series arrays (``X_tech``, ``X_sentiment``, ``X_sentiment_probs``) are
+    stored **flat** — one row per trading day — to avoid the 64× memory expansion
+    that windowing would cause.  ``X_fundamental``, ``y``, and ``dates`` are
+    aligned to window *end* dates and have ``N = T - window + 1`` rows.
+
+    Window ``i`` (0-indexed) corresponds to:
+
+    - flat slice ``[i : i + window]`` for ``X_tech``, ``X_sentiment``, ``X_sentiment_probs``
+    - row ``i`` for ``X_fundamental``, ``y``, ``dates``
+    """
 
     X_tech: np.ndarray
-    """``(N, window, 16)`` technical factor windows."""
+    """``(T, 16)`` flat technical factor rows."""
     X_sentiment: np.ndarray
-    """``(N, window, 768)`` sentiment embedding windows."""
+    """``(T, 768)`` flat sentiment embedding rows."""
     X_fundamental: np.ndarray
     """``(N, n_fund)`` fundamental snapshots at each window end date.
     Shape is ``(N, 0)`` when no fundamental data is provided."""
     X_sentiment_probs: np.ndarray
-    """``(N, window, 3)`` daily FinBERT softmax probs over the rolling window
-    — ``[P(pos), P(neg), P(neutral)]``.  Zero vector for days without news.
-    Shape is ``(N, window, 0)`` when no sentiment data is provided."""
+    """``(T, 3)`` flat daily FinBERT softmax probs — ``[P(pos), P(neg), P(neutral)]``.
+    Zero vector for days without news.  Shape is ``(T, 0)`` when no sentiment
+    data is provided."""
     y: np.ndarray
     """``(N,)`` binary labels."""
     dates: np.ndarray
     """``(N,)`` date of last day in each window."""
+    window: int
+    """Sliding window size used to build this dataset."""
 
 
-class FusedStockDataset(Dataset):
-    """PyTorch Dataset for (tech, sentiment, fundamental, sentiment_probs, target) tuples."""
+class LazyFusedDataset(Dataset):
+    """PyTorch Dataset that slices windows on-the-fly to avoid memory expansion.
+
+    The flat time-series tensors (``X_tech``, ``X_sentiment``,
+    ``X_sentiment_probs``) are shared across all splits of a symbol — only one
+    copy per symbol lives in memory regardless of how many splits reference it.
+    Windows are materialised as tensor views inside ``__getitem__``.
+
+    Parameters
+    ----------
+    X_tech:
+        Pre-scaled flat tensor of shape ``(T, n_factors)``.  Shared across splits.
+    X_sent:
+        Flat tensor of shape ``(T, sent_dim)``.  Shared across splits.
+    X_sprob:
+        Flat tensor of shape ``(T, n_sprob)`` or ``(T, 0)``.  Shared across splits.
+    X_fund:
+        ``(N, n_fund)`` numpy array — indexed by *indices* at construction time.
+    y:
+        ``(N,)`` numpy array — indexed by *indices* at construction time.
+    window:
+        Sliding window size.
+    indices:
+        1-D array of window indices (into the flat arrays) that this split exposes.
+        Window index ``wi`` maps to flat slice ``[wi : wi + window]``.
+    """
 
     def __init__(
         self,
-        X_tech: np.ndarray,
-        X_sentiment: np.ndarray,
-        X_fundamental: np.ndarray,
-        X_sentiment_probs: np.ndarray,
+        X_tech: torch.Tensor,
+        X_sent: torch.Tensor,
+        X_sprob: torch.Tensor,
+        X_fund: np.ndarray,
         y: np.ndarray,
+        window: int,
+        indices: np.ndarray,
     ) -> None:
-        self.X_tech = torch.tensor(X_tech, dtype=torch.float32)
-        self.X_sentiment = torch.tensor(X_sentiment, dtype=torch.float32)
-        self.X_fundamental = torch.tensor(X_fundamental, dtype=torch.float32)
-        self.X_sentiment_probs = torch.tensor(X_sentiment_probs, dtype=torch.float32)
-        self.y = torch.tensor(y, dtype=torch.float32)
+        self.X_tech = X_tech
+        self.X_sent = X_sent
+        self.X_sprob = X_sprob
+        # Fund and y are small — pre-index so __getitem__ stays O(1)
+        self.X_fund = torch.tensor(X_fund[indices], dtype=torch.float32)
+        self.y = torch.tensor(y[indices], dtype=torch.float32)
+        self.window = window
+        self.indices = indices  # numpy int array
 
     def __len__(self) -> int:
-        return len(self.X_tech)
+        return len(self.indices)
 
     def __getitem__(
         self, i: int
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        wi = int(self.indices[i])
         return (
-            self.X_tech[i],
-            self.X_sentiment[i],
-            self.X_fundamental[i],
-            self.X_sentiment_probs[i],
-            self.y[i],
+            self.X_tech[wi : wi + self.window],   # (window, n_factors) — view
+            self.X_sent[wi : wi + self.window],    # (window, sent_dim) — view
+            self.X_fund[i],                        # (n_fund,)
+            self.X_sprob[wi : wi + self.window],   # (window, n_sprob) — view
+            self.y[i],                             # scalar
         )
 
 
@@ -198,7 +240,6 @@ def align_fundamentals(
     if fund_df is None or fund_df.empty:
         return np.zeros((len(win_dates), 0), dtype=np.float32)
 
-    n_fund = fund_df.shape[1]
     dates_idx = pd.DatetimeIndex(win_dates)
 
     # Reindex with forward-fill: for each query date, use the last known snapshot
@@ -223,6 +264,11 @@ def build_dataset(
     include_momentum_slope: bool = True,
 ) -> FusedDataset:
     """Full pipeline: OHLCV → factors + targets + aligned sentiment/fundamentals → windows.
+
+    Time-series arrays are returned **flat** (one row per trading day) rather
+    than pre-windowed.  This avoids the ``window``-fold memory expansion that
+    windowing ``(T, 768)`` embeddings would otherwise cause.  Windows are
+    materialised lazily inside :class:`LazyFusedDataset`.
 
     Parameters
     ----------
@@ -256,18 +302,21 @@ def build_dataset(
 
     Returns
     -------
-    Dict with keys:
+    :class:`FusedDataset` with keys:
 
-    - ``X_tech``             — ``(N, window, 16)`` technical factor windows
-    - ``X_sentiment``        — ``(N, window, 768)`` sentiment embedding windows
-    - ``X_fundamental``      — ``(N, n_fund [+ 1 if include_momentum_slope])`` fundamental
-      snapshots; ``(N, 0)`` only when both *fundamental_df* is ``None`` and
-      *include_momentum_slope* is ``False``
-    - ``X_sentiment_probs``  — ``(N, window, 3)`` daily FinBERT softmax probs over the
-      rolling window; ``(N, window, 0)`` when *sentiment_df* is ``None`` or has no
-      ``sentiment_probs`` column
+    - ``X_tech``             — ``(T, 16)`` flat technical factor rows
+    - ``X_sentiment``        — ``(T, 768)`` flat sentiment embedding rows
+    - ``X_fundamental``      — ``(N, n_fund [+ 1 if include_momentum_slope])``
+      fundamental snapshots at window end dates; ``(N, 0)`` only when both
+      *fundamental_df* is ``None`` and *include_momentum_slope* is ``False``
+    - ``X_sentiment_probs``  — ``(T, 3)`` flat daily FinBERT softmax probs;
+      ``(T, 0)`` when *sentiment_df* is ``None`` or has no ``sentiment_probs`` column
     - ``y``                  — ``(N,)`` binary labels
     - ``dates``              — ``(N,)`` date of last day in each window
+    - ``window``             — sliding window size (int)
+
+    where ``T`` is the number of valid trading days after indicator warmup and
+    ``N = T - window + 1`` is the number of windows.
     """
     # Validate: SMA-60 warmup + window + 2 rows for target computation
     min_rows = 60 + window + 2
@@ -293,54 +342,61 @@ def build_dataset(
 
     # Drop rows where target is NaN (end of series — no future data)
     valid = targets.notna()
-    factors_arr = factors_df[valid].values.astype(np.float32)
-    embeddings_arr = embeddings[valid.values]
-    sent_probs_arr = sent_probs[valid.values]
+    factors_arr = factors_df[valid].values.astype(np.float32)    # (T, 16) flat
+    embeddings_arr = embeddings[valid.values]                      # (T, 768) flat
+    sent_probs_arr = sent_probs[valid.values]                      # (T, 3) flat
     targets_arr = targets[valid].values.astype(np.float32)
-    dates = factors_df.index[valid]
+    factor_dates = factors_df.index[valid]
+
+    T = len(targets_arr)
+    N = T - window + 1
+    if N <= 0:
+        raise RuntimeError(
+            f"Not enough data for window={window}: only {T} valid rows for ticker='{ticker}'"
+        )
+
+    # Window-end labels and dates (N values)
+    y = targets_arr[window - 1:]          # (N,)
+    win_dates = factor_dates[window - 1:].values  # (N,)
 
     # Align close prices to factor dates for momentum slope computation
     close_arr: np.ndarray | None = None
     if include_momentum_slope:
         close_arr = close.reindex(factors_df.index).ffill()[valid].values.astype(np.float64)
 
-    # Build sliding windows over tech + sentiment + sentiment probs
-    X_tech, X_sent, X_sprob, y, win_dates = _build_windows(
-        factors_arr, embeddings_arr, sent_probs_arr, targets_arr, dates, window
-    )
-
     # Align fundamentals to window end dates (no time dim)
     X_fund = align_fundamentals(win_dates, fundamental_df)
 
     # Append momentum slope as an extra fundamental-style scalar feature.
-    # Uses the last min(20, window) closes of each window so the model can learn
-    # whether trend context improves predictions rather than applying a hard gate.
+    # Uses the last min(20, window) closes of each window — computed from the
+    # flat close_arr using the same index arithmetic as _build_windows used.
     if include_momentum_slope and close_arr is not None:
         slope_len = min(20, window)
         xs = np.arange(slope_len)
         slopes = np.array(
             [np.polyfit(xs, close_arr[i + window - slope_len : i + window], 1)[0]
-             for i in range(len(y))],
+             for i in range(N)],
             dtype=np.float32,
         ).reshape(-1, 1)
         X_fund = np.concatenate([X_fund, slopes], axis=1)
 
     n_fund = X_fund.shape[1]
-    n_sprob = X_sprob.shape[2]
+    n_sprob = sent_probs_arr.shape[1]
     logger.info(
-        "Built dataset: %d windows, %d tech factors, %d fundamental factors "
+        "Built dataset: %d windows (%d flat rows), %d tech factors, %d fundamental factors "
         "(%s momentum slope), %d sentiment prob features, window=%d",
-        len(y), factors_arr.shape[1], n_fund,
+        N, T, factors_arr.shape[1], n_fund,
         "incl." if include_momentum_slope else "excl.",
         n_sprob, window,
     )
     return {
-        "X_tech": X_tech,
-        "X_sentiment": X_sent,
+        "X_tech": factors_arr,
+        "X_sentiment": embeddings_arr,
         "X_fundamental": X_fund,
-        "X_sentiment_probs": X_sprob,
+        "X_sentiment_probs": sent_probs_arr,
         "y": y,
         "dates": win_dates,
+        "window": window,
     }
 
 
@@ -349,11 +405,16 @@ def make_loaders(
     test_frac: float = 0.2,
     val_frac: float = 0.1,
     batch_size: int = 32,
+    num_workers: int = 0,
 ) -> tuple[DataLoader, DataLoader, DataLoader, StandardScaler, StandardScaler | None]:
     """Split chronologically, normalize features, create DataLoaders.
 
     Both technical factors and fundamental factors are normalized with separate
     ``StandardScaler`` instances fitted on training data only.
+
+    The flat time-series tensors are placed in shared memory (via
+    ``tensor.share_memory_()``) so that DataLoader worker processes can access
+    them without copying.
 
     Parameters
     ----------
@@ -365,6 +426,11 @@ def make_loaders(
         Fraction of (train + val) data reserved for validation.
     batch_size:
         Batch size for all three DataLoaders.
+    num_workers:
+        Number of worker processes for the DataLoader.  ``0`` (default) means
+        single-process loading.  Set to the number of available CPU cores for
+        maximum throughput.  ``persistent_workers`` is enabled automatically
+        when ``num_workers > 0``.
 
     Returns
     -------
@@ -374,60 +440,56 @@ def make_loaders(
     Both scalers are fitted on training data only and applied to all splits.
     """
     N = len(dataset["y"])
+    window = dataset["window"]
     test_start = int(N * (1 - test_frac))
     val_start = int(test_start * (1 - val_frac))
 
-    splits = {
-        "train": slice(0, val_start),
-        "val": slice(val_start, test_start),
-        "test": slice(test_start, N),
-    }
+    train_idx = np.arange(0, val_start)
+    val_idx   = np.arange(val_start, test_start)
+    test_idx  = np.arange(test_start, N)
 
-    # Fit StandardScaler on training technical factors only
-    X_train_tech = dataset["X_tech"][splits["train"]]
+    # Fit tech scaler on flat rows covered by train windows only
+    flat_train_end = int(train_idx[-1]) + window  # exclusive upper bound
     tech_scaler = StandardScaler()
-    n_samples, win, n_feat = X_train_tech.shape
-    tech_scaler.fit(X_train_tech.reshape(-1, n_feat))
+    tech_scaler.fit(dataset["X_tech"][:flat_train_end])
 
-    # Fit StandardScaler on training fundamental factors (if present)
+    # Fit fund scaler on train windows
     X_fund_all = dataset["X_fundamental"]
     n_fund = X_fund_all.shape[1]
     fund_scaler: StandardScaler | None = None
     if n_fund > 0:
         fund_scaler = StandardScaler()
-        fund_scaler.fit(X_fund_all[splits["train"]])
+        fund_scaler.fit(X_fund_all[train_idx])
 
-    X_sprob_all = dataset["X_sentiment_probs"]
+    # Scale flat arrays once; move to shared memory so worker processes can
+    # read them without copying when num_workers > 0.
+    X_tech_t = torch.tensor(
+        tech_scaler.transform(dataset["X_tech"]).astype(np.float32)
+    ).share_memory_()
+    X_sent_t  = torch.tensor(dataset["X_sentiment"]).share_memory_()
+    X_sprob_t = torch.tensor(dataset["X_sentiment_probs"]).share_memory_()
+
+    X_fund_scaled = X_fund_all.copy()
+    if fund_scaler is not None:
+        X_fund_scaled = fund_scaler.transform(X_fund_scaled).astype(np.float32)
 
     loaders = {}
-    for name, sl in splits.items():
-        X_tech = dataset["X_tech"][sl].copy()
-        X_sent = dataset["X_sentiment"][sl]
-        X_fund = X_fund_all[sl].copy()
-        X_sprob = X_sprob_all[sl]
-        y = dataset["y"][sl]
-
-        # Normalize technical factors
-        n, w, f = X_tech.shape
-        X_tech = (
-            tech_scaler.transform(X_tech.reshape(-1, f))
-            .reshape(n, w, f)
-            .astype(np.float32)
+    for name, idx in (("train", train_idx), ("val", val_idx), ("test", test_idx)):
+        ds = LazyFusedDataset(X_tech_t, X_sent_t, X_sprob_t, X_fund_scaled, dataset["y"], window, idx)
+        loaders[name] = DataLoader(
+            ds,
+            batch_size=batch_size,
+            shuffle=(name == "train"),
+            drop_last=(name == "train"),
+            num_workers=num_workers,
+            persistent_workers=(num_workers > 0),
         )
-
-        # Normalize fundamental factors
-        if fund_scaler is not None:
-            X_fund = fund_scaler.transform(X_fund).astype(np.float32)
-
-        # Sentiment probs are already in [0, 1] — no normalization needed
-        ds = FusedStockDataset(X_tech, X_sent, X_fund, X_sprob, y)
-        loaders[name] = DataLoader(ds, batch_size=batch_size, shuffle=(name == "train"), drop_last=(name == "train"))
 
     logger.info(
         "Split sizes — train: %d, val: %d, test: %d",
-        val_start,
-        test_start - val_start,
-        N - test_start,
+        len(train_idx),
+        len(val_idx),
+        len(test_idx),
     )
     return loaders["train"], loaders["val"], loaders["test"], tech_scaler, fund_scaler
 
@@ -437,6 +499,7 @@ def make_loaders_multi(
     cutoffs: dict[str, pd.Timestamp],
     val_months: int = 2,
     batch_size: int = 32,
+    num_workers: int = 0,
 ) -> tuple[DataLoader, DataLoader, DataLoader, StandardScaler, StandardScaler | None]:
     """Per-symbol temporal split with staggered cutoffs, then normalize and create DataLoaders.
 
@@ -446,7 +509,11 @@ def make_loaders_multi(
     - **val**   — ``cutoffs[symbol] - val_months months <= date < cutoffs[symbol]``
     - **train** — ``date < cutoffs[symbol] - val_months months``
 
-    All train windows across symbols are concatenated to fit the scalers.
+    Flat time-series tensors are created once per symbol and shared across the
+    symbol's train/val/test :class:`LazyFusedDataset` instances — no per-split
+    copies of the embedding arrays are made.  Splits are combined with
+    ``torch.utils.data.ConcatDataset``.
+
     The old :func:`make_loaders` is kept for single-symbol use.
 
     Parameters
@@ -459,6 +526,11 @@ def make_loaders_multi(
         Calendar months immediately before each cutoff reserved for validation.
     batch_size:
         Batch size for all three DataLoaders.
+    num_workers:
+        Number of worker processes for the DataLoader.  ``0`` (default) means
+        single-process loading.  Set to the number of available CPU cores for
+        maximum throughput.  ``persistent_workers`` is enabled automatically
+        when ``num_workers > 0``.
 
     Returns
     -------
@@ -466,114 +538,150 @@ def make_loaders_multi(
 
     ``fund_scaler`` is ``None`` when no fundamental features are present.
     """
-    train_parts: dict[str, list[np.ndarray]] = {k: [] for k in ("tech", "sent", "fund", "sprob", "y")}
-    val_parts:   dict[str, list[np.ndarray]] = {k: [] for k in ("tech", "sent", "fund", "sprob", "y")}
-    test_parts:  dict[str, list[np.ndarray]] = {k: [] for k in ("tech", "sent", "fund", "sprob", "y")}
+    # ------------------------------------------------------------------
+    # Pass 1 — compute split indices and collect flat train slices for
+    #           scaler fitting (no windowing required).
+    # ------------------------------------------------------------------
+    split_indices: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
+    tech_flat_parts: list[np.ndarray] = []
+    fund_train_parts: list[np.ndarray] = []
 
     for symbol, ds in datasets:
         cutoff = cutoffs[symbol]
-        val_start = cutoff - pd.DateOffset(months=val_months)
+        val_start_date = cutoff - pd.DateOffset(months=val_months)
         dates = pd.DatetimeIndex(ds["dates"])
 
-        train_mask = dates < val_start
-        val_mask   = (dates >= val_start) & (dates < cutoff)
-        test_mask  = dates >= cutoff
+        train_idx = np.where(dates < val_start_date)[0]
+        val_idx   = np.where((dates >= val_start_date) & (dates < cutoff))[0]
+        test_idx  = np.where(dates >= cutoff)[0]
+        split_indices[symbol] = (train_idx, val_idx, test_idx)
 
-        for mask, parts in ((train_mask, train_parts), (val_mask, val_parts), (test_mask, test_parts)):
-            idx = np.asarray(mask)
-            parts["tech"].append(ds["X_tech"][idx])
-            parts["sent"].append(ds["X_sentiment"][idx])
-            parts["fund"].append(ds["X_fundamental"][idx])
-            parts["sprob"].append(ds["X_sentiment_probs"][idx])
-            parts["y"].append(ds["y"][idx])
+        if len(train_idx) == 0:
+            continue
 
-    def _concat(parts: dict[str, list[np.ndarray]]) -> dict[str, np.ndarray]:
-        return {k: np.concatenate(v, axis=0) for k, v in parts.items() if v}
+        # Flat rows used by train windows: window wi uses rows [wi : wi+window]
+        window = ds["window"]
+        flat_end = int(train_idx[-1]) + window  # exclusive
+        tech_flat_parts.append(ds["X_tech"][:flat_end])
+        fund_train_parts.append(ds["X_fundamental"][train_idx])
 
-    train = _concat(train_parts)
-    val   = _concat(val_parts)
-    test  = _concat(test_parts)
-
-    for split_name, split in (("train", train), ("val", val), ("test", test)):
-        logger.info("make_loaders_multi — %s: %d windows", split_name, len(split["y"]))
-
-    # Fit scalers on training data only
-    X_train_tech = train["tech"]
-    n_samples, win, n_feat = X_train_tech.shape
+    # Fit scalers on concatenated flat training rows
     tech_scaler = StandardScaler()
-    tech_scaler.fit(X_train_tech.reshape(-1, n_feat))
+    tech_scaler.fit(np.concatenate(tech_flat_parts, axis=0))
 
-    n_fund = train["fund"].shape[1]
+    n_fund = datasets[0][1]["X_fundamental"].shape[1] if datasets else 0
     fund_scaler: StandardScaler | None = None
-    if n_fund > 0:
+    if n_fund > 0 and fund_train_parts:
         fund_scaler = StandardScaler()
-        fund_scaler.fit(train["fund"])
+        fund_scaler.fit(np.concatenate(fund_train_parts, axis=0))
+
+    # ------------------------------------------------------------------
+    # Pass 2 — scale flat arrays and build LazyFusedDataset instances.
+    #           Each symbol produces one shared tensor triple; train/val/test
+    #           datasets for that symbol all reference the same tensors.
+    # ------------------------------------------------------------------
+    train_lazy: list[LazyFusedDataset] = []
+    val_lazy:   list[LazyFusedDataset] = []
+    test_lazy:  list[LazyFusedDataset] = []
+
+    for symbol, ds in datasets:
+        train_idx, val_idx, test_idx = split_indices[symbol]
+        window = ds["window"]
+
+        # Scale and convert flat arrays once — shared across splits.
+        # share_memory_() lets worker processes read without copying.
+        X_tech_t = torch.tensor(
+            tech_scaler.transform(ds["X_tech"]).astype(np.float32)
+        ).share_memory_()
+        X_sent_t  = torch.tensor(ds["X_sentiment"]).share_memory_()
+        X_sprob_t = torch.tensor(ds["X_sentiment_probs"]).share_memory_()
+
+        X_fund_scaled = ds["X_fundamental"].copy()
+        if fund_scaler is not None:
+            X_fund_scaled = fund_scaler.transform(X_fund_scaled).astype(np.float32)
+
+        for idx, lazy_list in (
+            (train_idx, train_lazy),
+            (val_idx,   val_lazy),
+            (test_idx,  test_lazy),
+        ):
+            if len(idx) == 0:
+                continue
+            lazy_list.append(
+                LazyFusedDataset(X_tech_t, X_sent_t, X_sprob_t, X_fund_scaled, ds["y"], window, idx)
+            )
+
+    for split_name, lazy_list in (("train", train_lazy), ("val", val_lazy), ("test", test_lazy)):
+        n = sum(len(d) for d in lazy_list)
+        logger.info("make_loaders_multi — %s: %d windows", split_name, n)
 
     loaders = {}
-    for name, split in (("train", train), ("val", val), ("test", test)):
-        X_tech = split["tech"].copy()
-        n, w, f = X_tech.shape
-        X_tech = (
-            tech_scaler.transform(X_tech.reshape(-1, f))
-            .reshape(n, w, f)
-            .astype(np.float32)
-        )
-        X_fund = split["fund"].copy()
-        if fund_scaler is not None:
-            X_fund = fund_scaler.transform(X_fund).astype(np.float32)
-
-        ds_torch = FusedStockDataset(X_tech, split["sent"], X_fund, split["sprob"], split["y"])
+    for name, lazy_list in (("train", train_lazy), ("val", val_lazy), ("test", test_lazy)):
+        combined = ConcatDataset(lazy_list)
         loaders[name] = DataLoader(
-            ds_torch,
+            combined,
             batch_size=batch_size,
             shuffle=(name == "train"),
             drop_last=(name == "train"),
+            num_workers=num_workers,
+            persistent_workers=(num_workers > 0),
         )
 
     return loaders["train"], loaders["val"], loaders["test"], tech_scaler, fund_scaler
 
 
-# ------------------------------------------------------------------
-# Private helpers
-# ------------------------------------------------------------------
+def build_eval_loader(
+    datasets: list[FusedDataset],
+    tech_scaler: StandardScaler,
+    fund_scaler: StandardScaler | None,
+    batch_size: int = 32,
+    num_workers: int = 0,
+) -> DataLoader:
+    """Build an evaluation DataLoader from a list of :class:`FusedDataset` dicts.
 
-
-def _build_windows(
-    factors: np.ndarray,
-    embeddings: np.ndarray,
-    sent_probs: np.ndarray,
-    targets: np.ndarray,
-    dates: pd.DatetimeIndex,
-    window: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Create sliding windows from aligned arrays.
-
-    For each window ``[i, ..., i+window-1]``, the target is the target
-    of the last day (index ``i+window-1``).
+    Applies *tech_scaler* and *fund_scaler* (fitted on training data) to each
+    dataset and combines them into a single :class:`~torch.utils.data.DataLoader`
+    via ``ConcatDataset``.  Intended for held-out symbol evaluation.
 
     Parameters
     ----------
-    sent_probs:
-        ``(M, 3)`` daily FinBERT softmax probs, or ``(M, 0)`` when disabled.
-        Windowed to ``(N, window, 3)`` or ``(N, window, 0)`` respectively.
+    datasets:
+        List of :class:`FusedDataset` dicts from :func:`build_dataset`.
+    tech_scaler:
+        Fitted ``StandardScaler`` for technical factors.
+    fund_scaler:
+        Fitted ``StandardScaler`` for fundamental factors, or ``None``.
+    batch_size:
+        Batch size for the returned DataLoader.
+
+    Returns
+    -------
+    A non-shuffling :class:`~torch.utils.data.DataLoader` over all windows.
     """
-    n = len(targets) - window + 1
-    if n <= 0:
-        raise RuntimeError(
-            f"Not enough data for window={window}: only {len(targets)} rows"
+    lazy_list: list[LazyFusedDataset] = []
+    for ds in datasets:
+        window = ds["window"]
+        N = len(ds["y"])
+        idx = np.arange(N)
+
+        X_tech_t = torch.tensor(
+            tech_scaler.transform(ds["X_tech"]).astype(np.float32)
+        ).share_memory_()
+        X_sent_t  = torch.tensor(ds["X_sentiment"]).share_memory_()
+        X_sprob_t = torch.tensor(ds["X_sentiment_probs"]).share_memory_()
+
+        X_fund_scaled = ds["X_fundamental"].copy()
+        if fund_scaler is not None:
+            X_fund_scaled = fund_scaler.transform(X_fund_scaled).astype(np.float32)
+
+        lazy_list.append(
+            LazyFusedDataset(X_tech_t, X_sent_t, X_sprob_t, X_fund_scaled, ds["y"], window, idx)
         )
 
-    # sliding_window_view produces (n_windows, n_features, window) for 2D input;
-    # transpose to (n_windows, window, n_features)
-    X_tech = sliding_window_view(factors, window, axis=0).transpose(0, 2, 1).copy()
-    X_sent = sliding_window_view(embeddings, window, axis=0).transpose(0, 2, 1).copy()
-
-    if sent_probs.shape[1] == 0:
-        X_sprob = np.zeros((n, window, 0), dtype=np.float32)
-    else:
-        X_sprob = sliding_window_view(sent_probs, window, axis=0).transpose(0, 2, 1).copy()
-
-    y = targets[window - 1 :]
-    win_dates = dates[window - 1 :].values
-
-    return X_tech, X_sent, X_sprob, y, win_dates
+    return DataLoader(
+        ConcatDataset(lazy_list),
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        persistent_workers=(num_workers > 0),
+    )
