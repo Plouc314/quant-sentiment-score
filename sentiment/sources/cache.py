@@ -26,3 +26,6 @@ class MarketDataCache:
 
     def _path(self, symbol: str, year: int) -> Path:
         return self.data_dir / symbol / f"{year}.csv"
+
+    def is_cached(self, ticker: str, year: int) -> bool:
+        return self._path(ticker, year).exists()
