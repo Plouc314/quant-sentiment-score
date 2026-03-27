@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(python -c \":*)",
+      "Bash(ls:*)",
+      "Bash(find C:/TFA/ProjectCode/ -name *.parquet)",
+      "Bash(find C:/TFA/ -path */data/sentiment*)",
+      "Bash(find C:/TFA/ProjectCode/ -name *.ipynb)"
+    ]
+  }
+}
