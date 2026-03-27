@@ -116,22 +116,21 @@ class LazyFusedDataset(Dataset):
 
 
 def compute_targets(close: pd.Series) -> pd.Series:
-    """Binary target for day *t*: ``1`` if ``close[t+2] > close[t-1]``, else ``0``.
+    """Binary target for day *t*: ``1`` if ``close[t+1] > close[t-1]``, else ``0``.
 
-    The 3-day window models a next-day executable signal:
+    The model runs overnight using data through close of *t-1*, so the signal
+    is ready before market open on day *t*:
 
-    - ``t-1`` — yesterday's close: the last confirmed price available when a
-      signal is generated at end-of-day *t*
-    - ``t+2`` — two trading days forward: accounts for one day of signal
-      propagation / execution latency and one day of actual holding period
+    - ``t-1`` — yesterday's close: the last confirmed price available when the
+      signal is generated
+    - ``t+1`` — next day's close: buy at open of *t*, sell at close of *t+1*
 
-    Concretely: a prediction at end of day *t* translates to
-    "buy at open of t+1, sell at close of t+2."
+    Concretely: a prediction translates to "buy at open of t, sell at close of t+1."
 
     All shifts are positional (trading days, not calendar days).
-    NaN at the first row (no t-1) and last two rows (no t+2).
+    NaN at the first row (no t-1) and last row (no t+1).
     """
-    future = close.shift(-2)
+    future = close.shift(-1)
     past = close.shift(1)
     target = (future > past).astype(np.float32)
     target[future.isna() | past.isna()] = np.nan
@@ -318,12 +317,12 @@ def build_dataset(
     where ``T`` is the number of valid trading days after indicator warmup and
     ``N = T - window + 1`` is the number of windows.
     """
-    # Validate: SMA-60 warmup + window + 2 rows for target computation
-    min_rows = 60 + window + 2
+    # Validate: SMA-60 warmup + window + 1 row for target computation
+    min_rows = 60 + window + 1
     if len(df) < min_rows:
         raise RuntimeError(
             f"Insufficient price history for ticker='{ticker}': need ≥ {min_rows} rows "
-            f"(60 indicator warmup + window={window} + 2 target rows), got {len(df)}. "
+            f"(60 indicator warmup + window={window} + 1 target row), got {len(df)}. "
             "Fetch more data before calling build_dataset."
         )
 
