@@ -106,6 +106,49 @@ class ArticleRepository:
         df["publish_date"] = pd.to_datetime(df["publish_date"]).dt.date
         return df
 
+    def read_symbol(
+        self,
+        symbol: str,
+        start: tuple[int, int],
+        end: tuple[int, int],
+    ) -> list[Article]:
+        """Return all articles tagged with *symbol* between *start* and *end* (inclusive).
+
+        Parameters
+        ----------
+        symbol:
+            Ticker symbol to filter by.
+        start:
+            ``(year, month)`` of the first month to include.
+        end:
+            ``(year, month)`` of the last month to include.
+        """
+        articles: list[Article] = []
+        year, month = start
+        end_year, end_month = end
+        while (year, month) <= (end_year, end_month):
+            df = self.read_month(year, month)
+            if not df.empty:
+                mask = df["tickers"].apply(lambda tickers: symbol in tickers)
+                for _, row in df[mask].iterrows():
+                    articles.append(
+                        {
+                            "id": row["id"],
+                            "url": row["url"],
+                            "title": row["title"],
+                            "text": row["text"],
+                            "publish_date": row["publish_date"],
+                            "source_name": row["source_name"],
+                            "language": row["language"],
+                            "tickers": list(row["tickers"]),
+                        }
+                    )
+            month += 1
+            if month > 12:
+                month = 1
+                year += 1
+        return articles
+
     def article_ids(self) -> list[str]:
         """Return all article IDs from the in-memory index."""
         return self._index_df["id"].tolist()

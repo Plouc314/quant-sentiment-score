@@ -9,3 +9,5 @@ data/**/*.txt
 .ipynb_checkpoints
 plan.md
 *.parquet
+
+*.png

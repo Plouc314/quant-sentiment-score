@@ -1,196 +1,166 @@
-import numpy as np
-import torch.nn as nn
-import torch
+from __future__ import annotations
+
 import time
+
+import numpy as np
+import torch
+import torch.nn as nn
 from IPython import display
 import matplotlib.pyplot as plt
 
 
-def train_epoch(model, optimizer, criterion, train_loader, device):
+def train_epoch(model: nn.Module, optimizer, criterion, train_loader, device: str) -> float:
     model.train()
-    total_loss = 0
-    
+    total_loss = 0.0
+
     for batch_X, batch_y in train_loader:
         batch_X, batch_y = batch_X.to(device), batch_y.to(device)
-        
-        optimizer.zero_grad()        # gradient initialization
-        output = model(batch_X)      # forward propagation
-        loss = criterion(output, batch_y) # loss calculation
-        loss.backward()              # backward propagation
-        optimizer.step()             # weight updates
-        
+        optimizer.zero_grad()
+        output = model(batch_X)
+        loss = criterion(output, batch_y)
+        loss.backward()
+        optimizer.step()
         total_loss += loss.item()
-        
-    return total_loss / len(train_loader) 
+
+    return total_loss / len(train_loader)
 
 
-def evaluate(model, criterion, test_loader, device):
+def evaluate(model: nn.Module, criterion, test_loader, device: str) -> float:
     model.eval()
-    total_loss = 0
-    
-    with torch.no_grad(): 
+    total_loss = 0.0
+
+    with torch.no_grad():
         for batch_X, batch_y in test_loader:
             batch_X, batch_y = batch_X.to(device), batch_y.to(device)
-            
             output = model(batch_X)
             loss = criterion(output, batch_y)
-            
             total_loss += loss.item()
-            
+
     return total_loss / len(test_loader)
 
 
-def train_cycle(model, optimizer, criterion, train_loader, test_loader, n_epochs, device, scheduler=None):
-    train_loss_log = []
-    test_loss_log = []
+def train_cycle(
+    model: nn.Module,
+    optimizer,
+    criterion,
+    train_loader,
+    test_loader,
+    n_epochs: int,
+    device: str,
+    scheduler=None,
+) -> tuple[list[float], list[float]]:
+    train_loss_log: list[float] = []
+    test_loss_log: list[float] = []
     start_time = time.time()
 
     for epoch in range(n_epochs):
-        # --- 1. Train & Evaluate ---
         train_loss = train_epoch(model, optimizer, criterion, train_loader, device)
         test_loss = evaluate(model, criterion, test_loader, device)
-        
+
         if scheduler:
             scheduler.step()
 
-        # --- 2. Chart updates ---
         train_loss_log.append(train_loss)
         test_loss_log.append(test_loss)
-        
+
         display.clear_output(wait=True)
         plt.figure(figsize=(10, 5))
-        plt.plot(train_loss_log, label='Train MSE', color='royalblue', lw=2)
-        plt.plot(test_loss_log, label='Test MSE', color='darkorange', lw=2)
-        plt.title(f"Training Progress [Epoch {epoch+1}/{n_epochs}]")
+        plt.plot(train_loss_log, label="Train MSE", color="royalblue", lw=2)
+        plt.plot(test_loss_log, label="Test MSE", color="darkorange", lw=2)
+        plt.title(f"Training Progress [Epoch {epoch + 1}/{n_epochs}]")
         plt.xlabel("Epochs")
         plt.ylabel("Loss (MSE)")
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.show()
 
-        # --- 3. Progress ---
         elapsed = time.time() - start_time
-        print(f"Epoch {epoch+1}/{n_epochs} | Train Loss: {train_loss:.6f} | Test Loss: {test_loss:.6f}")
+        print(f"Epoch {epoch + 1}/{n_epochs} | Train Loss: {train_loss:.6f} | Test Loss: {test_loss:.6f}")
         print(f"Running Time: {elapsed:.1f}s")
 
-    print("\n Learning finished!")
+    print("\nLearning finished!")
     return train_loss_log, test_loss_log
 
 
-def plot_prediction(model, test_loader, scaler, device="cpu"):
-# estimated price vs real price
+def directional_accuracy(model: nn.Module, test_loader, device: str = "cpu") -> float:
+    """Fraction of predictions with the correct sign (up vs down).
+
+    For trading, direction matters more than magnitude. A model that
+    correctly predicts *whether* the next bar is positive or negative
+    is actionable even if the magnitude is off.
+
+    Returns
+    -------
+    Float in [0, 1] — 0.5 is chance level for balanced returns.
+    """
     model.eval()
-    preds = []
-    actuals = []
+    preds: list[np.ndarray] = []
+    actuals: list[np.ndarray] = []
 
     with torch.no_grad():
         for batch_X, batch_y in test_loader:
             batch_X = batch_X.to(device)
             output = model(batch_X)
-            
             preds.append(output.cpu().numpy())
             actuals.append(batch_y.numpy())
 
-    preds = np.vstack(preds)
-    actuals = np.vstack(actuals)
+    preds_arr = np.vstack(preds).flatten()
+    actuals_arr = np.vstack(actuals).flatten()
+    return float(np.mean(np.sign(preds_arr) == np.sign(actuals_arr)))
 
-    # ---  (Inverse Transform) ---
 
-    def denormalize(data):
-        dummy = np.zeros((len(data), 7))
-        dummy[:, 3] = data.flatten() # index3 : close
-        return scaler.inverse_transform(dummy)[:, 3]
+def plot_prediction(model: nn.Module, test_loader, scaler=None, device: str = "cpu") -> tuple[np.ndarray, np.ndarray]:
+    """Plot predicted vs actual values from the test set.
 
-    final_preds = denormalize(preds)
-    final_actuals = denormalize(actuals)
+    When *scaler* is ``None`` (default), the target is assumed to be
+    log-returns — predicted and actual log-returns are plotted directly.
+
+    When *scaler* is provided (legacy mode), inverse-transforms predictions
+    back to raw price using the original ``MinMaxScaler``.
+
+    Returns
+    -------
+    ``(preds, actuals)`` — raw arrays before any inverse transform.
+    """
+    model.eval()
+    preds: list[np.ndarray] = []
+    actuals: list[np.ndarray] = []
+
+    with torch.no_grad():
+        for batch_X, batch_y in test_loader:
+            batch_X = batch_X.to(device)
+            output = model(batch_X)
+            preds.append(output.cpu().numpy())
+            actuals.append(batch_y.numpy())
+
+    preds_arr = np.vstack(preds).flatten()
+    actuals_arr = np.vstack(actuals).flatten()
+
+    if scaler is not None:
+        # Legacy: inverse-transform scaled close price
+        def _denormalize(data: np.ndarray) -> np.ndarray:
+            dummy = np.zeros((len(data), 7))
+            dummy[:, 3] = data
+            return scaler.inverse_transform(dummy)[:, 3]
+
+        plot_preds = _denormalize(preds_arr)
+        plot_actuals = _denormalize(actuals_arr)
+        ylabel = "Price"
+        title = "Stock Price Prediction"
+    else:
+        plot_preds = preds_arr
+        plot_actuals = actuals_arr
+        ylabel = "Log Return"
+        title = "Predicted vs Actual Log Return"
 
     plt.figure(figsize=(12, 6))
-    plt.plot(final_actuals, label='Actual Price', color='royalblue', alpha=0.7)
-    plt.plot(final_preds, label='Predicted Price', color='crimson', linestyle='--')
-    plt.title('Final Stock Price Prediction')
-    plt.xlabel('Time')
-    plt.ylabel('Price')
+    plt.plot(plot_actuals, label="Actual", color="royalblue", alpha=0.7)
+    plt.plot(plot_preds, label="Predicted", color="crimson", linestyle="--")
+    plt.title(title)
+    plt.xlabel("Time")
+    plt.ylabel(ylabel)
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.show()
 
-    return final_preds, final_actuals
-
-# def train_cycle(model, optimizer, criterion, train_loader, test_loader, n_epochs, device, scheduler=None):
-#     train_loss_log, test_loss_log = [], []
-#     test_mae_log = []
-    
-#     
-#     mae_criterion = torch.nn.L1Loss()
-#     start_time = time.time()
-
-#     for epoch in range(n_epochs):
-#         # --- 1. Training Phase ---
-#         model.train()
-#         train_loss = 0
-#         for batch_X, batch_y in train_loader:
-#             batch_X, batch_y = batch_X.to(device), batch_y.to(device)
-#             optimizer.zero_grad()
-#             output = model(batch_X)
-#             loss = criterion(output, batch_y)
-#             loss.backward()
-#             optimizer.step()
-#             train_loss += loss.item()
-        
-#         # --- 2. Evaluation Phase ---
-#         model.eval()
-#         test_loss = 0
-#         test_mae = 0
-#         with torch.no_grad():
-#             for batch_X, batch_y in test_loader:
-#                 batch_X, batch_y = batch_X.to(device), batch_y.to(device)
-#                 output = model(batch_X)
-#                 test_loss += criterion(output, batch_y).item()
-#                 test_mae += mae_criterion(output, batch_y).item()
-        
-#         if scheduler:
-#             scheduler.step()
-
-#         # log update
-#         train_loss_log.append(train_loss / len(train_loader))
-#         test_loss_log.append(test_loss / len(test_loader))
-#         test_mae_log.append(test_mae / len(test_loader))
-
-#         plot_training_results(train_loss_log, test_loss_log, test_mae_log)
-
-#         elapsed = time.time() - start_time
-#         print(f"Epoch {epoch+1}/{n_epochs} | Loss: {train_loss_log[-1]:.6f} | MAE: {test_mae_log[-1]:.6f} | Time: {elapsed:.1f}s")
-
-#     return train_loss_log, test_loss_log, test_mae_log
-
-
-#     def plot_training_results(train_loss_log, test_loss_log, test_mae_log):
-
-#     epochs = np.arange(1, len(train_loss_log) + 1)
-    
-#     fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-#     display.clear_output(wait=True)
-
-#     # -------------------------------
-#     # (1) Loss Plot (MSE)
-#     # -------------------------------
-#     ax[0].plot(epochs, train_loss_log, c='blue', label='Train Loss (MSE)')
-#     ax[0].plot(epochs, test_loss_log, c='orange', label='Test Loss (MSE)')
-#     ax[0].set_title('Training / Test Loss')
-#     ax[0].set_xlabel('Epoch')
-#     ax[0].set_ylabel('Loss')
-#     ax[0].legend()
-#     ax[0].grid(True)
-
-#     # -------------------------------
-#     # (2) MAE Plot
-#     # -------------------------------
-#     ax[1].plot(epochs, test_mae_log, c='green', label='Test MAE')
-#     ax[1].set_title('Test Mean Absolute Error')
-#     ax[1].set_xlabel('Epoch')
-#     ax[1].set_ylabel('MAE')
-#     ax[1].legend()
-#     ax[1].grid(True)
-
-#     plt.tight_layout()
-#     plt.show()
+    return preds_arr, actuals_arr
