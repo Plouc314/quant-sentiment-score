@@ -11,28 +11,35 @@ pip3 install -r requirements.txt
 pip3 install -e .
 ```
 
-Copy `.env.example` to `.env` and fill in API credentials (Alpaca, MediaCloud).
+Copy `.env.example` to `.env` and fill in the Alpaca API credentials.
 
 ## Architecture
 
 Quantitative trading sentiment analysis based on https://doi.org/10.3390/electronics12183960.
 
-The `sentiment/` package has two independent pipelines:
+The `src/` package is organised into five layers:
 
-**Market data pipeline:**
-- `sources/alpaca.py` — `AlpacaSource` fetches OHLCV bars from Alpaca API with retry/backoff
-- `sources/cache.py` — `MarketDataCache` persists bars as CSV under `data/historical-prices/<SYMBOL>/<YEAR>.csv`
+**Providers** — thin wrappers around external APIs (Alpaca, Yahoo Finance, Kaggle). Each provider fetches data and returns it as a DataFrame or TypedDict; no persistence logic.
 
-**News pipeline:**
-- `sources/news/search.py` — `NewsSearch` wraps MediaCloud API, returns `Story` objects
-- `sources/news/extractor.py` — `ArticleExtractor` uses trafilatura to fetch and extract article text; parallel by source with per-source rate limiting
-- `sources/news/blacklist.py` — `SourceBlacklist` tracks per-source fetch failures and auto-blacklists sources that exceed the failure threshold
-- `sources/news/repository.py` — `ArticleRepository` stores articles in `data/news/` (CSV index + per-article `.txt` files)
-- `sources/news/models.py` — `Story` and `Article` TypedDicts
+**Repositories** — read/write data to disk. Each repository owns one data type and one directory layout. No business logic — just load and store.
 
-`sentiment/__init__.py` calls `load_dotenv()` — no other file should call it.
+**Embeddings** — two-step NLP pipeline: long articles are summarised before being encoded by FinBERT into 768-dim vectors and 3-class sentiment probabilities. `aggregate_daily()` collapses per-article encodings into one row per ticker per day.
 
-Notebooks live in `notebooks/` and are the primary entry point. Call `setup_logging()` from `sentiment/log.py` at the top of each notebook/script.
+**Features** — builds PyTorch-ready datasets. `TechnicalFactors` computes 16 scale-invariant OHLCV indicators. `StockDataset` aligns prices, embeddings, and fundamentals into flat arrays with lazy windowing. `DataLoaderBuilder` applies temporal splits, fits scalers on training data, and returns DataLoaders.
+
+**Model** — `SentimentLSTM` and `SentimentTransformer` share the same input contract. `Trainer` handles the training loop, early stopping, and bootstrap evaluation.
+
+**Top-level:**
+- `models.py` — `Article`, `Fundamentals`, `ArticleEncoding` TypedDicts
+- `training.py` — `TrainingConfig`, `ComputeConfig`, `Split`
+- `log.py` — `setup_logging()`; call this at the top of each notebook/script
+
+`src/__init__.py` calls `load_dotenv()` — no other file should call it.
+
+Notebooks live in `notebooks/` and are the primary entry point:
+- `fetch_data.ipynb` — populate all repositories (prices, fundamentals, news, sentiment)
+- `train.ipynb` — train a model and save a checkpoint
+- `evaluate.ipynb` — load a checkpoint and run bootstrap evaluation
 
 ## Coding Conventions
 
