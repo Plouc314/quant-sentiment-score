@@ -39,8 +39,8 @@ class SentimentPipeline:
         encoder_model: str = "ProsusAI/finbert",
         summarizer_model: str | None = "facebook/bart-large-cnn",
     ) -> None:
-        self.summarizer = Summarizer(device, summarizer_model)
         self.encoder = SentimentEncoder(device, encoder_model)
+        self.summarizer = Summarizer(device, summarizer_model, finbert_tokenizer=self.encoder._tok)
 
     def encode_article(self, article: Article) -> ArticleEncoding:
         """Encode a single article through summarization → FinBERT.
@@ -101,7 +101,9 @@ def aggregate_daily(
     DataFrame with columns: ticker, date, sentiment_score, n_articles,
     embedding, sentiment_probs.
 
-    sentiment_score = mean(label) across articles that day; range [0.0, 1.0].
+    sentiment_score = dot(mean(sentiment_probs), [1.0, 0.0, 0.5]); range [0.0, 1.0].
+    Derived from aggregated softmax probs so mixed days (pos+neg) are
+    distinguishable from neutral days via the full sentiment_probs vector.
     embedding / sentiment_probs = element-wise mean of per-article arrays.
     """
     if not articles:
@@ -127,7 +129,7 @@ def aggregate_daily(
 
     agg = (
         df.groupby(["ticker", "date"])
-        .agg(sentiment_score=("label", "mean"), n_articles=("label", "count"))
+        .agg(n_articles=("label", "count"))
         .reset_index()
     )
 
@@ -143,4 +145,11 @@ def aggregate_daily(
         means = means[["ticker", "date", col]]
         agg = agg.merge(means, on=["ticker", "date"])
 
-    return agg
+    # FinBERT class order: [P(positive), P(negative), P(neutral)]
+    # Soft score = 1.0*P(pos) + 0.0*P(neg) + 0.5*P(neutral)
+    _SCORE_WEIGHTS = np.array([1.0, 0.0, 0.5], dtype=np.float32)
+    agg["sentiment_score"] = agg["sentiment_probs"].apply(
+        lambda p: float(np.dot(p, _SCORE_WEIGHTS))
+    )
+
+    return agg[["ticker", "date", "sentiment_score", "n_articles", "embedding", "sentiment_probs"]]

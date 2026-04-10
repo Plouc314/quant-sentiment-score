@@ -92,8 +92,6 @@ Nominal cutoff is **2019-10-01** with a ±45-day per-symbol stagger.
 
 **FinBERT embeddings (768 dims) projected to 16 dims** then concatenated with 16-dim technical features effectively discards almost all the semantic content. A linear 768→16 bottleneck loses enormous amounts of information. Either keep the projection larger (64–128) or use only the 3-class probabilities and skip the full embedding in the sequence encoder.
 
-**Concatenating [tech×2, sentiment×1, probs×1] before the LSTM** gives technical features double the weight of sentiment by construction (`n_factors*2` vs `n_factors`). This looks unintentional.
-
 **The 3-year price window (2018–2020)** is very short and includes the COVID crash as the only major regime shift. Generalization to different volatility regimes is untested.
 
 ---

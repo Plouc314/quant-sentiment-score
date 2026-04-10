@@ -78,8 +78,7 @@ class Trainer:
         compute = self._compute
         model   = self._model
 
-        if compute.device != "cpu":
-            torch.manual_seed(0)
+        torch.manual_seed(0)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -142,6 +141,9 @@ class Trainer:
         no repeated GPU passes.
         """
         probs, targets = self._collect_predictions(loader)
+        # Threshold assumes pos_weight=None (balanced loss). If pos_weight != 1
+        # was used during training the model's outputs are miscalibrated relative
+        # to 0.5; AUC (threshold-independent) remains valid either way.
         preds    = (probs >= 0.5).astype(int)
         n        = len(targets)
         rng      = np.random.default_rng(seed)

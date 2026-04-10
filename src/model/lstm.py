@@ -10,7 +10,9 @@ class SentimentLSTM(nn.Module):
     Architecture::
 
         sentiment_proj : Linear(sentiment_dim → n_factors)
-        lstm           : LSTM(n_factors*2 + n_sentiment_probs, hidden_size, num_layers)
+        lstm           : LSTM(n_factors + n_factors + n_sentiment_probs, hidden_size, num_layers)
+                         ↑ tech_dim   ↑ sent_proj_dim  ↑ FinBERT probs
+                         = 32-dim global feature vector (paper §3.2)
         classifier     : Linear(hidden_size, hidden_size)
                          → ReLU → Dropout → BatchNorm1d → Linear(1)
 
@@ -32,8 +34,10 @@ class SentimentLSTM(nn.Module):
         self.n_sentiment_probs = n_sentiment_probs
 
         self.sentiment_proj = nn.Linear(sentiment_dim, n_factors)
+        tech_dim = n_factors        # 16 technical indicators
+        sent_proj_dim = n_factors   # sentiment embedding projected to same width
         self.lstm = nn.LSTM(
-            input_size=n_factors * 2 + n_sentiment_probs,
+            input_size=tech_dim + sent_proj_dim + n_sentiment_probs,
             hidden_size=hidden_size,
             num_layers=num_layers,
             batch_first=True,
