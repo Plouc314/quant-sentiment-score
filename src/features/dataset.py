@@ -19,10 +19,9 @@ _EMBEDDING_DIM = 768
 class StockDataset:
     """Computes and holds the full feature matrix for one stock symbol.
 
-    All arrays are stored flat (one row per trading day for time-series arrays,
-    one row per window for fundamental / target arrays) to avoid the ``window``-fold
-    memory expansion that pre-windowing would cause.  Windows are materialised
-    lazily inside :class:`DataLoaderBuilder`.
+    All arrays are stored flat (one row per trading day) to avoid the
+    ``window``-fold memory expansion that pre-windowing would cause.  Windows
+    are materialised lazily inside :class:`DataLoaderBuilder`.
 
     Parameters
     ----------
@@ -33,14 +32,8 @@ class StockDataset:
     sentiment_df:
         Daily sentiment aggregates produced by ``SentimentPipeline``.  ``None``
         disables sentiment — zero vectors are used for all days.
-    fundamental_df:
-        Time-indexed DataFrame of fundamental snapshots from
-        ``FundamentalsRepository.load_history()``.  ``None`` disables fundamentals.
     window:
         Sliding window size in trading days.
-    include_momentum_slope:
-        Append the 20-day linear-regression slope of closing prices as an extra
-        scalar in the fundamental feature vector.
     """
 
     def __init__(
@@ -48,9 +41,7 @@ class StockDataset:
         symbol: str,
         price_df: pd.DataFrame,
         sentiment_df: pd.DataFrame | None = None,
-        fundamental_df: pd.DataFrame | None = None,
         window: int = 64,
-        include_momentum_slope: bool = True,
     ) -> None:
         self.symbol = symbol
         self.window = window
@@ -84,30 +75,14 @@ class StockDataset:
         self.y: np.ndarray     = targets_arr[window - 1:]
         self.dates: np.ndarray = factor_dates[window - 1:].values
 
-        self.X_fund: np.ndarray = _align_fundamentals(self.dates, fundamental_df)
-
-        if include_momentum_slope:
-            close_arr = price_df["close"].reindex(factors_df.index).ffill()[valid].values.astype(np.float64)
-            slope_len = min(20, window)
-            xs = np.arange(slope_len)
-            slopes = np.array(
-                [np.polyfit(xs, close_arr[i + window - slope_len: i + window], 1)[0] for i in range(N)],
-                dtype=np.float32,
-            ).reshape(-1, 1)
-            self.X_fund = np.concatenate([self.X_fund, slopes], axis=1)
-
         logger.info(
-            "%s: %d windows, %d tech, %d fund, %d sent_prob features",
-            symbol, N, self.X_tech.shape[1], self.X_fund.shape[1], self.X_sprob.shape[1],
+            "%s: %d windows, %d tech, %d sent_prob features",
+            symbol, N, self.X_tech.shape[1], self.X_sprob.shape[1],
         )
 
     @property
     def n_windows(self) -> int:
         return len(self.y)
-
-    @property
-    def n_fundamentals(self) -> int:
-        return self.X_fund.shape[1]
 
     @property
     def n_sentiment_probs(self) -> int:
@@ -142,13 +117,12 @@ class DataLoaderBuilder:
         self._config = config
         self._compute = compute_config
         self._tech_scaler: StandardScaler | None = None
-        self._fund_scaler: StandardScaler | None = None
 
     def build(self) -> tuple[DataLoader, DataLoader, DataLoader]:
         """Compute temporal splits, fit scalers on train, return DataLoaders.
 
         Must be called before :meth:`build_held_out_loader` or accessing
-        :attr:`tech_scaler` / :attr:`fund_scaler`.
+        :attr:`tech_scaler`.
 
         Returns
         -------
@@ -161,7 +135,6 @@ class DataLoaderBuilder:
         # Pass 1 — compute per-symbol split indices and collect train rows for scaling
         split_indices: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
         tech_train_rows: list[np.ndarray] = []
-        fund_train_rows: list[np.ndarray] = []
 
         for symbol in self._split.train_symbols:
             ds = self._datasets.get(symbol)
@@ -179,18 +152,12 @@ class DataLoaderBuilder:
             if len(train_idx) > 0:
                 flat_end = int(train_idx[-1]) + ds.window
                 tech_train_rows.append(ds.X_tech[:flat_end])
-                fund_train_rows.append(ds.X_fund[train_idx])
 
         if not tech_train_rows:
             raise RuntimeError("No training data found — check that datasets and split match")
 
         self._tech_scaler = StandardScaler()
         self._tech_scaler.fit(np.concatenate(tech_train_rows, axis=0))
-
-        n_fund = self.n_fundamentals
-        if n_fund > 0 and fund_train_rows:
-            self._fund_scaler = StandardScaler()
-            self._fund_scaler.fit(np.concatenate(fund_train_rows, axis=0))
 
         # Pass 2 — build _LazyDataset instances per symbol/split
         train_lazy: list[_LazyDataset] = []
@@ -243,17 +210,6 @@ class DataLoaderBuilder:
         return self._tech_scaler
 
     @property
-    def fund_scaler(self) -> StandardScaler | None:
-        return self._fund_scaler
-
-    @property
-    def n_fundamentals(self) -> int:
-        for s in self._split.train_symbols:
-            if s in self._datasets:
-                return self._datasets[s].n_fundamentals
-        return 0
-
-    @property
     def n_sentiment_probs(self) -> int:
         for s in self._split.train_symbols:
             if s in self._datasets:
@@ -267,11 +223,7 @@ class DataLoaderBuilder:
         X_sent_t  = torch.tensor(ds.X_sent).share_memory_()
         X_sprob_t = torch.tensor(ds.X_sprob).share_memory_()
 
-        X_fund = ds.X_fund.copy()
-        if self._fund_scaler is not None:
-            X_fund = self._fund_scaler.transform(X_fund).astype(np.float32)
-
-        return _LazyDataset(X_tech_t, X_sent_t, X_sprob_t, X_fund, ds.y, ds.window, indices)
+        return _LazyDataset(X_tech_t, X_sent_t, X_sprob_t, ds.y, ds.window, indices)
 
 
 # ------------------------------------------------------------------
@@ -287,7 +239,6 @@ class _LazyDataset(Dataset):
         X_tech:  torch.Tensor,
         X_sent:  torch.Tensor,
         X_sprob: torch.Tensor,
-        X_fund:  np.ndarray,
         y:       np.ndarray,
         window:  int,
         indices: np.ndarray,
@@ -295,8 +246,7 @@ class _LazyDataset(Dataset):
         self.X_tech  = X_tech
         self.X_sent  = X_sent
         self.X_sprob = X_sprob
-        self.X_fund  = torch.tensor(X_fund[indices], dtype=torch.float32)
-        self.y       = torch.tensor(y[indices],      dtype=torch.float32)
+        self.y       = torch.tensor(y[indices], dtype=torch.float32)
         self.window  = window
         self.indices = indices
 
@@ -308,7 +258,6 @@ class _LazyDataset(Dataset):
         return (
             self.X_tech [wi: wi + self.window],
             self.X_sent [wi: wi + self.window],
-            self.X_fund [i],
             self.X_sprob[wi: wi + self.window],
             self.y[i],
         )
@@ -364,15 +313,6 @@ def _align_sent_probs(
         if p is not None:
             result[i] = p
     return result
-
-
-def _align_fundamentals(win_dates: np.ndarray, fund_df: pd.DataFrame | None) -> np.ndarray:
-    if fund_df is None or fund_df.empty:
-        return np.zeros((len(win_dates), 0), dtype=np.float32)
-    dates_idx = pd.DatetimeIndex(win_dates)
-    reindexed = fund_df.reindex(dates_idx.union(fund_df.index)).sort_index()
-    reindexed = reindexed.ffill().reindex(dates_idx)
-    return reindexed.fillna(0.0).values.astype(np.float32)
 
 
 def _make_loader(

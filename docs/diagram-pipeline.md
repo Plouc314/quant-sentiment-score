@@ -13,19 +13,15 @@
  │  (daily     │               │  Trend   : SMA5/20/60, MACD    │  size=64, stride=1 ──► X_tech
  │   bars)     │               │  Momentum: MACD sig, RSI,       │                        (N, 64, 16)
  └─────────────┘               │           Stoch K/D, ROC-10    │
-         │                     │  Volatility: ATR, BB%B, BBwidth │
-         │                     │  Volume  : vol/SMA20, OBV slope │
-         │  (close prices)     │           VWAP/close            │
-         │                     │  Returns : log_return           │
-         │                     │  ──────────────────────────     │
-         │                     │  per-day vector: (16,)          │
-         │                     │  StandardScaler (train only)    │
-         │                     └────────────────────────────────┘
-         │
-         │  (last 20 closes                                                               X_fundamental
-         │   per window)  ──── momentum slope ──────────────────────────────────────────► appended
-         │                     (lin. reg. slope)                                          as feature 10
-         │
+                               │  Volatility: ATR, BB%B, BBwidth │
+                               │  Volume  : vol/SMA20, OBV slope │
+                               │           VWAP/close            │
+                               │  Returns : log_return           │
+                               │  ──────────────────────────     │
+                               │  per-day vector: (16,)          │
+                               │  StandardScaler (train only)    │
+                               └────────────────────────────────┘
+
  ┌─────────────┐  Stories   ┌─────────────────────┐   raw text   ┌──────────────────┐
  │  MediaCloud │ ─────────► │   ArticleExtractor   │ ──────────► │  BART Summarizer │
  │  API        │            │   (trafilatura)      │             │  (facebook/       │
@@ -57,16 +53,6 @@
                                                               X_sentiment
                                                               (N, 64, 768)
 
- ┌─────────────┐  quarterly  ┌─────────────────────────────────────────┐
- │  yfinance   │ ──────────► │  FundamentalCache  (fundamentals.csv)   │
- │  snapshots  │             │  PE, fwdPE, PB, PS, ROE,                │
- └─────────────┘             │  op_margin, profit_margin, D/E, beta    │
-                             │  ──────────────────────────────────      │
-                             │  forward-fill quarterly → daily          │
-                             │  snapshot at window end date             │
-                             │  StandardScaler (train only)             │  ──────────────────────► X_fundamental
-                             └─────────────────────────────────────────┘                           (N, 9) or (N,10)
-
 
 ══════════════════════════════════════════════════════════════════════════════════════════════════════
                                           MODEL
@@ -92,13 +78,9 @@
                     │  │                                       take LAST hidden state│   │
                     │  │                                            (N, 32)          │   │
                     │  └─────────────────────────────────────────────────────────────┘   │
-                    │                                               │                     │
-  X_fundamental     │                                          concat                     │
-  (N, 10) ──────────┼──────────────────────────────────────────── │                     │
+                    │                                              │                      │
                     │                                              ▼                      │
-                    │                                        (N, 32+10 = 42)             │
-                    │                                              ▼                      │
-                    │                          classifier: Linear(42→32) → ReLU          │
+                    │                          classifier: Linear(32→32) → ReLU          │
                     │                                      → Dropout(0.2)                 │
                     │                                      → BatchNorm1d                  │
                     │                                      → Linear(32→1)                 │
@@ -135,13 +117,9 @@
                     │  │                              MEAN POOL over 64 days         │   │
                     │  │                                      → (N, 64)              │   │
                     │  └─────────────────────────────────────────────────────────────┘   │
-                    │                                               │                     │
-  X_fundamental     │                                          concat                     │
-  (N, 10) ──────────┼──────────────────────────────────────────── │                     │
+                    │                                              │                      │
                     │                                              ▼                      │
-                    │                                       (N, 64+10 = 74)              │
-                    │                                              ▼                      │
-                    │                            classifier: Linear(74 → 1)              │
+                    │                            classifier: Linear(64 → 1)              │
                     │                                                                     │
                     └──────────────────────────────────────────────┼──────────────────────┘
                                                                    │
@@ -167,6 +145,7 @@
 ## Notes
 
 - **N** = number of windows = (trading days − 60 warmup − window − 2 + 1), where 60 is the SMA-60 lookback, 2 is for the target computation, and +1 accounts for the inclusive sliding window count
-- The **LSTM summary is 32 numbers**, the **Transformer summary is 64** (`d_model`), so their classifier inputs differ (42 vs 74) but the final output shape is identical
+- The **LSTM summary is 32 numbers**, the **Transformer summary is 64** (`d_model`) — these are the classifier inputs and the final output shape is identical
 - `X_sentiment_probs` is a **64-day sequence** (same window as `X_sentiment`), concatenated with tech and projected sentiment before the temporal model — both come from FinBERT and capture temporal sentiment dynamics
-- The **momentum gate** is an optional post-inference filter (option A from `design.md`) — it runs after the model, not inside it
+- The **momentum gate** is an optional post-inference filter (option A from `design.md`) — it runs after the model, not inside it. This matches the paper (Sec 2.5), which uses the 20-day slope for momentum rotation trading *after* prediction, not as a model feature.
+- **Fundamentals are intentionally absent.** The reference paper (Sec 2.2) uses them only as a pre-screen over the stock universe, not as model features. We don't implement that screen because yfinance does not provide historical point-in-time fundamentals (the paper uses RESSET/CSMAR); forward-filling a current snapshot across training windows would leak future information into the past.

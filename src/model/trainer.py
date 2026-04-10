@@ -46,7 +46,7 @@ class Trainer:
     Parameters
     ----------
     model:
-        A model whose ``forward(tech, sentiment, fundamentals, sentiment_probs)``
+        A model whose ``forward(tech, sentiment, sentiment_probs)``
         returns logits of shape ``(batch, 1)``.
     config:
         Training hyperparameters (lr, patience, n_epochs, …).
@@ -78,8 +78,7 @@ class Trainer:
         compute = self._compute
         model   = self._model
 
-        if compute.device != "cpu":
-            torch.manual_seed(0)
+        torch.manual_seed(0)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -142,6 +141,9 @@ class Trainer:
         no repeated GPU passes.
         """
         probs, targets = self._collect_predictions(loader)
+        # Threshold assumes pos_weight=None (balanced loss). If pos_weight != 1
+        # was used during training the model's outputs are miscalibrated relative
+        # to 0.5; AUC (threshold-independent) remains valid either way.
         preds    = (probs >= 0.5).astype(int)
         n        = len(targets)
         rng      = np.random.default_rng(seed)
@@ -199,15 +201,14 @@ class Trainer:
         total_loss = 0.0
         n_samples  = 0
 
-        for tech, sentiment, fundamentals, sentiment_probs, targets in loader:
+        for tech, sentiment, sentiment_probs, targets in loader:
             tech            = tech.to(device)
             sentiment       = sentiment.to(device)
-            fundamentals    = fundamentals.to(device)
             sentiment_probs = sentiment_probs.to(device)
             targets         = targets.to(device)
 
             optimizer.zero_grad()
-            logits = model(tech, sentiment, fundamentals, sentiment_probs)
+            logits = model(tech, sentiment, sentiment_probs)
             loss   = criterion(logits, targets.unsqueeze(1))
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
@@ -247,14 +248,13 @@ class Trainer:
         total_loss = 0.0
 
         with torch.no_grad():
-            for tech, sentiment, fundamentals, sentiment_probs, targets in loader:
+            for tech, sentiment, sentiment_probs, targets in loader:
                 tech            = tech.to(device)
                 sentiment       = sentiment.to(device)
-                fundamentals    = fundamentals.to(device)
                 sentiment_probs = sentiment_probs.to(device)
                 targets         = targets.to(device)
 
-                logits = model(tech, sentiment, fundamentals, sentiment_probs)
+                logits = model(tech, sentiment, sentiment_probs)
                 if criterion is not None:
                     total_loss += criterion(logits, targets.unsqueeze(1)).item() * len(targets)
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import torch
-from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, PreTrainedTokenizerBase
 
 from .encoder import FINBERT_MAX_LENGTH
+
+_FINBERT_MODEL = "ProsusAI/finbert"
 
 # BART-CNN generation defaults
 _BART_MAX_INPUT = 1024
@@ -29,6 +31,7 @@ class Summarizer:
         self,
         device: str = "cpu",
         model_name: str | None = "facebook/bart-large-cnn",
+        finbert_tokenizer: PreTrainedTokenizerBase | None = None,
     ) -> None:
         self.device = torch.device(device)
         self._noop = model_name is None
@@ -36,6 +39,11 @@ class Summarizer:
             self._tok = AutoTokenizer.from_pretrained(model_name)
             self._model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
             self._model.eval().to(self.device)
+            self._finbert_tok: PreTrainedTokenizerBase = (
+                finbert_tokenizer
+                if finbert_tokenizer is not None
+                else AutoTokenizer.from_pretrained(_FINBERT_MODEL)
+            )
 
     def summarize(self, content: str) -> str:
         """Compress article content to a summary suitable for FinBERT encoding.
@@ -52,11 +60,11 @@ class Summarizer:
         if self._noop:
             return content
 
-        # Short-content bypass: use BART tokenizer as a proxy for FinBERT length.
-        # BART and FinBERT tokenizers produce similar token counts for financial
-        # prose, so this avoids loading a second tokenizer just for the length check.
-        bart_tokens = self._tok(content, truncation=False)
-        if len(bart_tokens["input_ids"]) <= FINBERT_MAX_LENGTH:
+        # Short-content bypass: use FinBERT's own tokenizer for the length check.
+        # BART (BPE) and FinBERT (WordPiece) tokenize financial jargon very
+        # differently, so the BART count is an unreliable proxy.
+        finbert_tokens = self._finbert_tok(content, truncation=False)
+        if len(finbert_tokens["input_ids"]) <= FINBERT_MAX_LENGTH:
             return content
 
         inputs = self._tok(

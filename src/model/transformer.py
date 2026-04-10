@@ -5,7 +5,7 @@ import torch.nn as nn
 
 
 class SentimentTransformer(nn.Module):
-    """Transformer encoder for binary stock movement prediction with sentiment + fundamental fusion.
+    """Transformer encoder for binary stock movement prediction with sentiment fusion.
 
     Architecture::
 
@@ -13,7 +13,7 @@ class SentimentTransformer(nn.Module):
         input_proj     : Linear(n_factors*2 + n_sentiment_probs → d_model)
         pos_embedding  : Embedding(max_seq_len, d_model)   [learned]
         encoder        : TransformerEncoder(d_model, nhead, n_layers, dim_feedforward)
-        classifier     : Linear(d_model + n_fundamentals → 1)
+        classifier     : Linear(d_model → 1)
 
     Mean pooling over the sequence replaces the LSTM's final hidden state —
     the last token has no recurrent privilege in a Transformer.
@@ -33,12 +33,10 @@ class SentimentTransformer(nn.Module):
         n_layers: int = 6,
         dim_feedforward: int = 128,
         dropout: float = 0.2,
-        n_fundamentals: int = 0,
         n_sentiment_probs: int = 0,
         max_seq_len: int = 100,
     ) -> None:
         super().__init__()
-        self.n_fundamentals    = n_fundamentals
         self.n_sentiment_probs = n_sentiment_probs
 
         self.sentiment_proj = nn.Linear(sentiment_dim, n_factors)
@@ -54,13 +52,12 @@ class SentimentTransformer(nn.Module):
         )
         self.encoder    = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
         self.dropout    = nn.Dropout(dropout)
-        self.classifier = nn.Linear(d_model + n_fundamentals, 1)
+        self.classifier = nn.Linear(d_model, 1)
 
     def forward(
         self,
         tech: torch.Tensor,
         sentiment: torch.Tensor,
-        fundamentals: torch.Tensor | None = None,
         sentiment_probs: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
@@ -68,7 +65,6 @@ class SentimentTransformer(nn.Module):
         ----------
         tech:            ``(batch, window, n_factors)``
         sentiment:       ``(batch, window, sentiment_dim)``
-        fundamentals:    ``(batch, n_fundamentals)`` or ``None``
         sentiment_probs: ``(batch, window, n_sentiment_probs)`` or ``None``
 
         Returns
@@ -93,12 +89,4 @@ class SentimentTransformer(nn.Module):
         x = self.input_proj(torch.cat(parts, dim=-1))
         x = x + self.pos_embedding(torch.arange(window, device=tech.device).unsqueeze(0))
         pooled = self.dropout(self.encoder(x).mean(dim=1))
-
-        if self.n_fundamentals > 0:
-            if fundamentals is None or fundamentals.shape[-1] == 0:
-                raise RuntimeError(
-                    f"model expects n_fundamentals={self.n_fundamentals} but received empty tensor"
-                )
-            pooled = torch.cat([pooled, fundamentals], dim=-1)
-
         return self.classifier(pooled)
