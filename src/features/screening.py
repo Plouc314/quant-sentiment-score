@@ -119,7 +119,7 @@ def screen_by_coverage(
         if df.empty:
             continue
         # explode list-valued tickers column to get one row per (article, ticker)
-        exploded = df[["id", "tickers"]].explode("tickers")
+        exploded = df[["benzinga_id", "tickers"]].explode("tickers")
         exploded = exploded[exploded["tickers"].isin(ticker_set)]
         for ticker, group in exploded.groupby("tickers"):
             counts[str(ticker)] += len(group)
