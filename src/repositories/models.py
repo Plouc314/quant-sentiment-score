@@ -12,7 +12,6 @@ from sklearn.preprocessing import StandardScaler
 class ModelCheckpoint:
     state_dict: dict
     tech_scaler: StandardScaler
-    fund_scaler: StandardScaler | None
     config: dict
     """Architecture + training config needed to reconstruct the model."""
 
@@ -41,7 +40,6 @@ class ModelRepository:
         name: str,
         model: nn.Module,
         tech_scaler: StandardScaler,
-        fund_scaler: StandardScaler | None,
         config: dict,
     ) -> None:
         """Save a checkpoint as ``<data_dir>/<name>.pt``."""
@@ -50,7 +48,6 @@ class ModelRepository:
             {
                 "state_dict": model.state_dict(),
                 "tech_scaler": tech_scaler,
-                "fund_scaler": fund_scaler,
                 "config": config,
             },
             self._data_dir / f"{name}.pt",
@@ -65,7 +62,6 @@ class ModelRepository:
         return ModelCheckpoint(
             state_dict=data["state_dict"],
             tech_scaler=data["tech_scaler"],
-            fund_scaler=data["fund_scaler"],
             config=data["config"],
         )
 

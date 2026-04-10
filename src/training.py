@@ -43,7 +43,6 @@ class TrainingConfig:
     lr: float = 1e-3
     patience: int = 15
     dropout: float = 0.2
-    include_momentum_slope: bool = True
 
 
 @dataclass
