@@ -5,14 +5,18 @@ import numpy as np
 
 
 class Article(TypedDict):
-    id: str
+    benzinga_id: int
     url: str
     title: str
-    text: str
     publish_date: date
-    source_name: str
-    language: str
     tickers: list[str]
+    author: str | None
+    body: str | None
+    teaser: str | None
+    last_updated: date | None
+    channels: list[str]
+    tags: list[str]
+    images: list[str]
 
 
 class ArticleEncoding(TypedDict):
