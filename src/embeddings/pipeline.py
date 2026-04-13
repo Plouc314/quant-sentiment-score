@@ -48,8 +48,10 @@ class SentimentPipeline:
         Returns a neutral encoding (label=0.5, zero vectors) when the article
         has neither title nor text.
         """
-        title = (article.get("title") or "").strip()
-        content = (article.get("text") or "").strip()
+        raw_title = article.get("title")
+        title = (raw_title if isinstance(raw_title, str) else "").strip()
+        raw_body = article.get("body")
+        content = (raw_body if isinstance(raw_body, str) else "").strip()
 
         if not title and not content:
             logger.warning("Article has no title or content — returning neutral encoding")
@@ -65,6 +67,8 @@ class SentimentPipeline:
         Failures are caught per-article and replaced with a neutral encoding so
         that one bad article does not abort the batch.
         """
+        total = len(articles)
+        logger.info("Encoding %d articles", total)
         results: list[ArticleEncoding] = []
         for i, article in enumerate(articles):
             try:
@@ -72,6 +76,8 @@ class SentimentPipeline:
             except Exception:
                 logger.exception("Failed to encode article %d — using neutral fallback", i)
                 results.append(_NEUTRAL_ENCODING)
+            if (i + 1) % 10 == 0:
+                logger.info("Encoded %d / %d articles", i + 1, total)
         return results
 
 
