@@ -40,7 +40,9 @@ class SentimentPipeline:
         summarizer_model: str | None = "facebook/bart-large-cnn",
     ) -> None:
         self.encoder = SentimentEncoder(device, encoder_model)
-        self.summarizer = Summarizer(device, summarizer_model, finbert_tokenizer=self.encoder._tok)
+        self.summarizer = Summarizer(
+            device, summarizer_model, finbert_tokenizer=self.encoder._tok
+        )
 
     def encode_article(self, article: Article) -> ArticleEncoding:
         """Encode a single article through summarization → FinBERT.
@@ -54,30 +56,68 @@ class SentimentPipeline:
         content = (raw_body if isinstance(raw_body, str) else "").strip()
 
         if not title and not content:
-            logger.warning("Article has no title or content — returning neutral encoding")
+            logger.warning(
+                "Article has no title or content — returning neutral encoding"
+            )
             return _NEUTRAL_ENCODING
 
         summary = self.summarizer.summarize(content) if content else ""
         text = f"{title} {summary}".strip()
         return self.encoder.encode(text)
 
-    def encode_articles(self, articles: list[Article]) -> list[ArticleEncoding]:
-        """Encode a list of articles sequentially.
+    def encode_articles(
+        self, articles: list[Article], batch_size: int = 16
+    ) -> list[ArticleEncoding]:
+        """Encode a list of articles using batched FinBERT inference.
 
-        Failures are caught per-article and replaced with a neutral encoding so
-        that one bad article does not abort the batch.
+        Summarisation is still performed sequentially (it is a no-op for most
+        articles). The resulting texts are then encoded in chunks of
+        *batch_size* to amortise forward-pass overhead on MPS/CUDA.
+
+        Summarisation failures are caught per-article and replaced with a
+        neutral encoding so that one bad article does not abort the run.
         """
         total = len(articles)
-        logger.info("Encoding %d articles", total)
-        results: list[ArticleEncoding] = []
+        logger.info("Encoding %d articles (batch_size=%d)", total, batch_size)
+
+        # Step 1 — summarise each article; None marks a failure
+        texts: list[str | None] = []
         for i, article in enumerate(articles):
             try:
-                results.append(self.encode_article(article))
+                raw_title = article.get("title")
+                title = (raw_title if isinstance(raw_title, str) else "").strip()
+                raw_body = article.get("body")
+                content = (raw_body if isinstance(raw_body, str) else "").strip()
+
+                if not title and not content:
+                    logger.warning(
+                        "Article %d has no title or content — using neutral fallback", i
+                    )
+                    texts.append(None)
+                    continue
+
+                summary = self.summarizer.summarize(content) if content else ""
+                texts.append(f"{title} {summary}".strip())
             except Exception:
-                logger.exception("Failed to encode article %d — using neutral fallback", i)
-                results.append(_NEUTRAL_ENCODING)
-            if (i + 1) % 10 == 0:
-                logger.info("Encoded %d / %d articles", i + 1, total)
+                logger.exception(
+                    "Failed to summarise article %d — using neutral fallback", i
+                )
+                texts.append(None)
+
+            if (i + 1) % 50 == 0 and not self.summarizer.noop:
+                logger.info("Summarised %d / %d articles", i + 1, total)
+
+        # Step 2 — batch-encode valid texts
+        valid_indices = [i for i, t in enumerate(texts) if t is not None]
+        valid_texts = [texts[i] for i in valid_indices]  # type: ignore[index]
+
+        batch_encodings = self.encoder.encode_batch(valid_texts, batch_size=batch_size)
+
+        # Step 3 — reassemble in original order
+        results: list[ArticleEncoding] = [_NEUTRAL_ENCODING] * total
+        for idx, enc in zip(valid_indices, batch_encodings):
+            results[idx] = enc
+
         return results
 
 
@@ -114,7 +154,14 @@ def aggregate_daily(
     """
     if not articles:
         return pd.DataFrame(
-            columns=["ticker", "date", "sentiment_score", "n_articles", "embedding", "sentiment_probs"]
+            columns=[
+                "ticker",
+                "date",
+                "sentiment_score",
+                "n_articles",
+                "embedding",
+                "sentiment_probs",
+            ]
         )
 
     rows = [
@@ -134,19 +181,13 @@ def aggregate_daily(
     df = pd.DataFrame(rows)
 
     agg = (
-        df.groupby(["ticker", "date"])
-        .agg(n_articles=("label", "count"))
-        .reset_index()
+        df.groupby(["ticker", "date"]).agg(n_articles=("label", "count")).reset_index()
     )
 
     for col in ["embedding", "sentiment_probs"]:
-        arr = np.stack(df[col].values)                    # (M, D)
+        arr = np.stack(df[col].values)  # (M, D)
         arr_df = pd.DataFrame(arr, index=df.index)
-        means = (
-            arr_df.groupby([df["ticker"], df["date"]])
-            .mean()
-            .reset_index()
-        )
+        means = arr_df.groupby([df["ticker"], df["date"]]).mean().reset_index()
         means[col] = list(means.iloc[:, 2:].values.astype(np.float32))
         means = means[["ticker", "date", col]]
         agg = agg.merge(means, on=["ticker", "date"])
@@ -158,4 +199,13 @@ def aggregate_daily(
         lambda p: float(np.dot(p, _SCORE_WEIGHTS))
     )
 
-    return agg[["ticker", "date", "sentiment_score", "n_articles", "embedding", "sentiment_probs"]]
+    return agg[
+        [
+            "ticker",
+            "date",
+            "sentiment_score",
+            "n_articles",
+            "embedding",
+            "sentiment_probs",
+        ]
+    ]

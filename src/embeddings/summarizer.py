@@ -45,6 +45,11 @@ class Summarizer:
                 else AutoTokenizer.from_pretrained(_FINBERT_MODEL)
             )
 
+    @property
+    def noop(self) -> bool:
+        """If the summarizer is deactivated"""
+        return self._noop
+
     def summarize(self, content: str) -> str:
         """Compress article content to a summary suitable for FinBERT encoding.
 

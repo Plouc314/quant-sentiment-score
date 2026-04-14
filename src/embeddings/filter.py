@@ -3,10 +3,32 @@ from __future__ import annotations
 import logging
 import random
 from collections import defaultdict
+from html.parser import HTMLParser
 
 from ..models import Article
 
 logger = logging.getLogger(__name__)
+
+
+class _HTMLStripper(HTMLParser):
+    """Minimal HTMLParser subclass that collects visible text."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+
+    def handle_data(self, data: str) -> None:
+        self._parts.append(data)
+
+    def get_text(self) -> str:
+        return " ".join(self._parts)
+
+
+def _strip_html(text: str) -> str:
+    """Return *text* with all HTML tags removed and entities decoded."""
+    stripper = _HTMLStripper()
+    stripper.feed(text)
+    return stripper.get_text()
 
 
 class ArticleFilter:
@@ -17,6 +39,7 @@ class ArticleFilter:
 
     Processing order per day:
 
+    0. Strip HTML tags and decode entities from the article body.
     1. Drop articles whose body is shorter than *min_body_chars* characters.
     2. If the remaining count exceeds *sample_above*, draw a random
        ``round(n * sample_ratio)`` subset — keeping at least 1.
@@ -60,6 +83,12 @@ class ArticleFilter:
         result: list[Article] = []
 
         for date, day_articles in by_date.items():
+            # Step 0 — strip HTML from body
+            day_articles = [
+                {**a, "body": _strip_html(a["body"]) if isinstance(a["body"], str) else a["body"]}
+                for a in day_articles
+            ]
+
             # Step 1 — minimum body length
             before_body = len(day_articles)
             if self.min_body_chars > 0:
