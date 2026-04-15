@@ -19,8 +19,9 @@ N_CLASSES = 3
 
 @dataclass
 class TrainingResult:
-    best_epoch:   int
-    best_val_auc: float
+    best_epoch:    int
+    best_val_loss: float
+    best_val_auc:  float
     history: dict[str, list[float]]
     """Per-epoch lists: train_loss, val_loss, val_auc, val_accuracy."""
 
@@ -86,9 +87,9 @@ class Trainer:
         torch.manual_seed(config.seed)
         np.random.seed(config.seed)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
+        optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="max", factor=0.5, patience=config.scheduler_patience
+            optimizer, mode="min", factor=0.5, patience=config.scheduler_patience
         )
         weight = (
             self._class_weights.to(compute.device)
@@ -96,6 +97,7 @@ class Trainer:
         )
         criterion = nn.CrossEntropyLoss(weight=weight)
 
+        best_loss      = float("inf")
         best_auc       = 0.0
         best_epoch     = 0
         best_state: dict | None = None
@@ -110,14 +112,15 @@ class Trainer:
             history["val_loss"].append(val_metrics["loss"])
             history["val_auc"].append(val_metrics["auc"])
             history["val_accuracy"].append(val_metrics["accuracy"])
-            scheduler.step(val_metrics["auc"])
+            scheduler.step(val_metrics["loss"])
 
             logger.info(
                 "Epoch %3d | train_loss=%.4f | val_loss=%.4f | val_auc=%.4f | val_acc=%.4f",
                 epoch, train_loss, val_metrics["loss"], val_metrics["auc"], val_metrics["accuracy"],
             )
 
-            if val_metrics["auc"] > best_auc:
+            if val_metrics["loss"] < best_loss:
+                best_loss  = val_metrics["loss"]
                 best_auc   = val_metrics["auc"]
                 best_epoch = epoch
                 best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
@@ -132,7 +135,7 @@ class Trainer:
         if best_state is not None:
             model.load_state_dict(best_state)
 
-        return TrainingResult(best_epoch=best_epoch, best_val_auc=best_auc, history=history)
+        return TrainingResult(best_epoch=best_epoch, best_val_loss=best_loss, best_val_auc=best_auc, history=history)
 
     def bootstrap_evaluate(
         self,

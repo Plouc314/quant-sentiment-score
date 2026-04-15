@@ -47,9 +47,10 @@ class TrainingConfig:
     window: int = 64
     batch_size: int = 32
     n_epochs: int = 100
-    lr: float = 1e-3
+    lr: float = 3e-4
+    weight_decay: float = 1e-4
     patience: int = 15
-    dropout: float = 0.2
+    dropout: float = 0.3
     target_threshold: float = 0.01
     seed: int = 42
     scheduler_patience: int = 5
