@@ -82,9 +82,9 @@ class ArticleRepository:
                                 if last_updated_raw and pd.notna(last_updated_raw)
                                 else None
                             ),
-                            channels=list(row.get("channels") or []),
-                            tags=list(row.get("tags") or []),
-                            images=list(row.get("images") or []),
+                            channels=list(row["channels"]) if row.get("channels") is not None else [],
+                            tags=list(row["tags"]) if row.get("tags") is not None else [],
+                            images=list(row["images"]) if row.get("images") is not None else [],
                         )
                     )
             month += 1
