@@ -34,6 +34,10 @@ class StockDataset:
         disables sentiment — zero vectors are used for all days.
     window:
         Sliding window size in trading days.
+    target_threshold:
+        Minimum absolute percent return to assign a label.  Returns inside
+        ``(-threshold, +threshold)`` are dropped (NaN).  ``0.0`` reproduces
+        the original ``close[t+2] > close[t-1]`` target.
     """
 
     def __init__(
@@ -42,6 +46,7 @@ class StockDataset:
         price_df: pd.DataFrame,
         sentiment_df: pd.DataFrame | None = None,
         window: int = 64,
+        target_threshold: float = 0.0,
     ) -> None:
         self.symbol = symbol
         self.window = window
@@ -53,7 +58,7 @@ class StockDataset:
                 f" got {len(price_df)}"
             )
 
-        targets = _compute_targets(price_df["close"])
+        targets = _compute_targets(price_df["close"], threshold=target_threshold)
         factors_df = TechnicalFactors().compute(price_df)
 
         targets = targets.reindex(factors_df.index)
@@ -268,12 +273,19 @@ class _LazyDataset(Dataset):
 # ------------------------------------------------------------------
 
 
-def _compute_targets(close: pd.Series) -> pd.Series:
-    """Binary target: 1 if close[t+2] > close[t-1] (3-day executable signal)."""
+def _compute_targets(close: pd.Series, threshold: float = 0.0) -> pd.Series:
+    """Binary target with dead-zone filtering.
+
+    1 if pct_return > threshold, 0 if pct_return < -threshold, NaN otherwise.
+    pct_return = (close[t+2] - close[t]) / close[t]
+    """
     future = close.shift(-2)
-    past   = close.shift(1)
-    target = (future > past).astype(np.float32)
-    target[future.isna() | past.isna()] = np.nan
+    pct    = (future - close) / close
+
+    target = pd.Series(np.nan, index=close.index, dtype=np.float32)
+    target[pct > threshold]  = 1.0
+    target[pct < -threshold] = 0.0
+    target[future.isna()] = np.nan
     return target
 
 
