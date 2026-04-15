@@ -5,7 +5,9 @@ import torch.nn as nn
 
 
 class SentimentTransformer(nn.Module):
-    """Transformer encoder for binary stock movement prediction with sentiment fusion.
+    """Transformer encoder for 3-class stock movement prediction with sentiment fusion.
+
+    Classes: 0 = sell, 1 = neutral, 2 = buy.
 
     Architecture::
 
@@ -13,10 +15,9 @@ class SentimentTransformer(nn.Module):
         input_proj     : Linear(n_factors*2 + n_sentiment_probs → d_model)
         pos_embedding  : Embedding(max_seq_len, d_model)   [learned]
         encoder        : TransformerEncoder(d_model, nhead, n_layers, dim_feedforward)
-        classifier     : Linear(d_model → 1)
+        classifier     : Linear(d_model → n_classes)
 
-    Mean pooling over the sequence replaces the LSTM's final hidden state —
-    the last token has no recurrent privilege in a Transformer.
+    Mean pooling over the sequence replaces the LSTM's final hidden state.
 
     Notes
     -----
@@ -35,9 +36,11 @@ class SentimentTransformer(nn.Module):
         dropout: float = 0.2,
         n_sentiment_probs: int = 0,
         max_seq_len: int = 100,
+        n_classes: int = 3,
     ) -> None:
         super().__init__()
         self.n_sentiment_probs = n_sentiment_probs
+        self.n_classes = n_classes
 
         self.sentiment_proj = nn.Linear(sentiment_dim, n_factors)
         self.input_proj     = nn.Linear(n_factors * 2 + n_sentiment_probs, d_model)
@@ -52,7 +55,7 @@ class SentimentTransformer(nn.Module):
         )
         self.encoder    = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
         self.dropout    = nn.Dropout(dropout)
-        self.classifier = nn.Linear(d_model, 1)
+        self.classifier = nn.Linear(d_model, n_classes)
         self._init_weights()
 
     def forward(
@@ -70,7 +73,7 @@ class SentimentTransformer(nn.Module):
 
         Returns
         -------
-        Logits of shape ``(batch, 1)``.
+        Logits of shape ``(batch, n_classes)``.
         """
         _, window, _ = tech.shape
         if window > self.pos_embedding.num_embeddings:

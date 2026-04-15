@@ -61,15 +61,15 @@ class StockDataset:
         targets = _compute_targets(price_df["close"], threshold=target_threshold)
         factors_df = TechnicalFactors().compute(price_df)
 
-        targets = targets.reindex(factors_df.index)
+        targets = targets.reindex(factors_df.index, fill_value=-1)
         embeddings = _align_embeddings(factors_df.index, sentiment_df, symbol)
         sent_probs = _align_sent_probs(factors_df.index, sentiment_df, symbol)
 
-        valid = targets.notna()
+        valid = targets >= 0  # drop sentinel (-1) for missing future close
         self.X_tech: np.ndarray  = factors_df[valid].values.astype(np.float32)
         self.X_sent: np.ndarray  = embeddings[valid.values]
         self.X_sprob: np.ndarray = sent_probs[valid.values]
-        targets_arr = targets[valid].values.astype(np.float32)
+        targets_arr = targets[valid].values.astype(np.int64)
         factor_dates = factors_df.index[valid]
 
         T = len(targets_arr)
@@ -251,7 +251,7 @@ class _LazyDataset(Dataset):
         self.X_tech  = X_tech
         self.X_sent  = X_sent
         self.X_sprob = X_sprob
-        self.y       = torch.tensor(y[indices], dtype=torch.float32)
+        self.y       = torch.tensor(y[indices], dtype=torch.long)
         self.window  = window
         self.indices = indices
 
@@ -273,19 +273,23 @@ class _LazyDataset(Dataset):
 # ------------------------------------------------------------------
 
 
-def _compute_targets(close: pd.Series, threshold: float = 0.0) -> pd.Series:
-    """Binary target with dead-zone filtering.
+def _compute_targets(close: pd.Series, threshold: float = 0.01) -> pd.Series:
+    """Three-class target: sell (0), neutral (1), buy (2).
 
-    1 if pct_return > threshold, 0 if pct_return < -threshold, NaN otherwise.
     pct_return = (close[t+2] - close[t]) / close[t]
+
+    - 0 (sell)    if pct_return < -threshold
+    - 1 (neutral) if |pct_return| <= threshold
+    - 2 (buy)     if pct_return > threshold
+    - NaN         for the last 2 rows where close[t+2] is unavailable
     """
     future = close.shift(-2)
     pct    = (future - close) / close
 
-    target = pd.Series(np.nan, index=close.index, dtype=np.float32)
-    target[pct > threshold]  = 1.0
-    target[pct < -threshold] = 0.0
-    target[future.isna()] = np.nan
+    target = pd.Series(1, index=close.index, dtype=np.int64)  # default: neutral
+    target[pct > threshold]  = 2   # buy
+    target[pct < -threshold] = 0   # sell
+    target[future.isna()] = -1     # sentinel for missing future
     return target
 
 

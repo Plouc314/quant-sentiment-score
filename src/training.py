@@ -50,7 +50,7 @@ class TrainingConfig:
     lr: float = 1e-3
     patience: int = 15
     dropout: float = 0.2
-    target_threshold: float = 0.0
+    target_threshold: float = 0.01
     seed: int = 42
     scheduler_patience: int = 5
 

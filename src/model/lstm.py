@@ -5,20 +5,17 @@ import torch.nn as nn
 
 
 class SentimentLSTM(nn.Module):
-    """LSTM for binary stock movement prediction with sentiment fusion.
+    """LSTM for 3-class stock movement prediction with sentiment fusion.
+
+    Classes: 0 = sell, 1 = neutral, 2 = buy.
 
     Architecture::
 
         sentiment_proj : Linear(sentiment_dim → n_factors)
         lstm           : LSTM(n_factors + n_factors + n_sentiment_probs, hidden_size, num_layers)
                          ↑ tech_dim   ↑ sent_proj_dim  ↑ FinBERT probs
-                         = 32-dim global feature vector (paper §3.2)
         classifier     : Linear(hidden_size, hidden_size)
-                         → ReLU → Dropout → BatchNorm1d → Linear(1)
-
-    Technical indicators, projected sentiment embeddings, and FinBERT class
-    probabilities flow through the LSTM to capture temporal dynamics over the
-    window.
+                         → ReLU → Dropout → BatchNorm1d → Linear(n_classes)
     """
 
     def __init__(
@@ -29,9 +26,11 @@ class SentimentLSTM(nn.Module):
         num_layers: int = 2,
         dropout: float = 0.2,
         n_sentiment_probs: int = 0,
+        n_classes: int = 3,
     ) -> None:
         super().__init__()
         self.n_sentiment_probs = n_sentiment_probs
+        self.n_classes = n_classes
 
         self.sentiment_proj = nn.Linear(sentiment_dim, n_factors)
         tech_dim = n_factors        # 16 technical indicators
@@ -48,7 +47,7 @@ class SentimentLSTM(nn.Module):
             nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(hidden_size, 1),
+            nn.Linear(hidden_size, n_classes),
         )
         self._init_weights()
 
@@ -67,7 +66,7 @@ class SentimentLSTM(nn.Module):
 
         Returns
         -------
-        Logits of shape ``(batch, 1)``.
+        Logits of shape ``(batch, n_classes)``.
         """
         projected = self.sentiment_proj(sentiment)
         parts = [tech, projected]
