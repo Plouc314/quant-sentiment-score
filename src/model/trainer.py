@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 import torch.nn as nn
+from sklearn.calibration import calibration_curve as _sklearn_calibration_curve
 from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
 from torch.utils.data import DataLoader
 
@@ -36,6 +37,9 @@ class EvalResult:
     recall_mean:    float
     recall_ci_low:  float
     recall_ci_high: float
+    brier_mean:    float
+    brier_ci_low:  float
+    brier_ci_high: float
     n_bootstrap: int
     n_samples:   int
 
@@ -78,11 +82,12 @@ class Trainer:
         compute = self._compute
         model   = self._model
 
-        torch.manual_seed(0)
+        torch.manual_seed(config.seed)
+        np.random.seed(config.seed)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="max", factor=0.5, patience=5
+            optimizer, mode="max", factor=0.5, patience=config.scheduler_patience
         )
         weight = (
             torch.tensor([self._pos_weight], dtype=torch.float32, device=compute.device)
@@ -140,7 +145,7 @@ class Trainer:
         Runs one forward pass to collect all predictions, then resamples in numpy —
         no repeated GPU passes.
         """
-        probs, targets = self._collect_predictions(loader)
+        probs, targets, _ = self._collect_predictions(loader)
         # Threshold assumes pos_weight=None (balanced loss). If pos_weight != 1
         # was used during training the model's outputs are miscalibrated relative
         # to 0.5; AUC (threshold-independent) remains valid either way.
@@ -154,6 +159,7 @@ class Trainer:
         accs:  list[float] = []
         precs: list[float] = []
         recs:  list[float] = []
+        briers: list[float] = []
         n_skipped = 0
 
         for _ in range(n_bootstrap):
@@ -166,6 +172,7 @@ class Trainer:
             accs.append(float(accuracy_score(t, pr)))
             precs.append(float(precision_score(t, pr, zero_division=0)))
             recs.append(float(recall_score(t, pr, zero_division=0)))
+            briers.append(float(np.mean((p - t) ** 2)))
 
         def _ci(samples: list[float]) -> tuple[float, float, float]:
             arr = np.array(samples)
@@ -175,15 +182,35 @@ class Trainer:
         cm, cl, ch = _ci(accs)
         pm, pl, ph = _ci(precs)
         rm, rl, rh = _ci(recs)
+        bm, bl, bh = _ci(briers)
 
         return EvalResult(
             auc_mean=am,      auc_ci_low=al,      auc_ci_high=ah,
             accuracy_mean=cm,    accuracy_ci_low=cl,    accuracy_ci_high=ch,
             precision_mean=pm,   precision_ci_low=pl,   precision_ci_high=ph,
             recall_mean=rm,   recall_ci_low=rl,   recall_ci_high=rh,
+            brier_mean=bm,    brier_ci_low=bl,    brier_ci_high=bh,
             n_bootstrap=n_bootstrap - n_skipped,
             n_samples=n,
         )
+
+    def calibration_curve(
+        self,
+        loader: DataLoader,
+        n_bins: int = 10,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Compute a calibration (reliability) curve.
+
+        Returns
+        -------
+        ``(fraction_of_positives, mean_predicted_value)`` — arrays of length
+        ``<= n_bins`` suitable for plotting a reliability diagram.
+        """
+        probs, targets, _ = self._collect_predictions(loader)
+        fraction_pos, mean_pred = _sklearn_calibration_curve(
+            targets, probs, n_bins=n_bins, strategy="uniform",
+        )
+        return fraction_pos, mean_pred
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -239,11 +266,11 @@ class Trainer:
         self,
         loader: DataLoader,
         criterion: nn.Module | None = None,
-    ) -> tuple[np.ndarray, np.ndarray, float] | tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, float]:
         model  = self._model
         device = self._compute.device
         model.eval()
-        all_logits:  list[np.ndarray] = []
+        all_probs:   list[np.ndarray] = []
         all_targets: list[np.ndarray] = []
         total_loss = 0.0
 
@@ -258,13 +285,10 @@ class Trainer:
                 if criterion is not None:
                     total_loss += criterion(logits, targets.unsqueeze(1)).item() * len(targets)
 
-                all_logits.append(logits.cpu().numpy())
+                all_probs.append(torch.sigmoid(logits).cpu().numpy())
                 all_targets.append(targets.cpu().numpy())
 
-        logits_arr  = np.concatenate(all_logits).squeeze()
+        probs_arr   = np.concatenate(all_probs).squeeze()
         targets_arr = np.concatenate(all_targets)
-        probs       = 1.0 / (1.0 + np.exp(-logits_arr))
 
-        if criterion is not None:
-            return probs, targets_arr, total_loss
-        return probs, targets_arr
+        return probs_arr, targets_arr, total_loss

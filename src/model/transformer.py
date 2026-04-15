@@ -53,6 +53,7 @@ class SentimentTransformer(nn.Module):
         self.encoder    = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
         self.dropout    = nn.Dropout(dropout)
         self.classifier = nn.Linear(d_model, 1)
+        self._init_weights()
 
     def forward(
         self,
@@ -90,3 +91,10 @@ class SentimentTransformer(nn.Module):
         x = x + self.pos_embedding(torch.arange(window, device=tech.device).unsqueeze(0))
         pooled = self.dropout(self.encoder(x).mean(dim=1))
         return self.classifier(pooled)
+
+    def _init_weights(self) -> None:
+        for module in [self.sentiment_proj, self.input_proj, self.classifier]:
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)

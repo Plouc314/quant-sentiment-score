@@ -20,7 +20,12 @@ class ComputeConfig:
 
     def __post_init__(self) -> None:
         if self.device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            if torch.cuda.is_available():
+                self.device = "cuda"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                self.device = "mps"
+            else:
+                self.device = "cpu"
 
     def setup(self) -> None:
         """Configure the process for training.
@@ -33,6 +38,8 @@ class ComputeConfig:
         mp.set_start_method("spawn", force=True)
         if self.n_threads is not None:
             torch.set_num_threads(self.n_threads)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 @dataclass
@@ -43,6 +50,9 @@ class TrainingConfig:
     lr: float = 1e-3
     patience: int = 15
     dropout: float = 0.2
+    target_threshold: float = 0.0
+    seed: int = 42
+    scheduler_patience: int = 5
 
 
 @dataclass

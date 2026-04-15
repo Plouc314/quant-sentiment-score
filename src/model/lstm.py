@@ -45,11 +45,12 @@ class SentimentLSTM(nn.Module):
         )
         self.classifier = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
+            nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.BatchNorm1d(hidden_size),
             nn.Linear(hidden_size, 1),
         )
+        self._init_weights()
 
     def forward(
         self,
@@ -80,3 +81,10 @@ class SentimentLSTM(nn.Module):
         out, _ = self.lstm(torch.cat(parts, dim=-1))
         last = out[:, -1, :]
         return self.classifier(last)
+
+    def _init_weights(self) -> None:
+        for module in [self.sentiment_proj, *self.classifier]:
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
