@@ -1,4 +1,11 @@
-"""Compute 16 technical indicators from OHLCV + VWAP data."""
+"""Compute the 16 technical indicators used in the reference paper.
+
+Matches the feature set defined in ``Quant/modeling/*/backtrader_sequence_model.py``
+(``extract_factor``) — raw talib indicators, not scale-invariant ratios.  These
+features span many orders of magnitude (e.g. ``ma5`` in dollars, ``obv`` in
+shares, ``macd_hist`` in small fractions), so they MUST be normalised
+per-window by :class:`_LazyDataset` before being fed to a model.
+"""
 
 from __future__ import annotations
 
@@ -6,36 +13,46 @@ import numpy as np
 import pandas as pd
 
 FACTOR_COLUMNS: list[str] = [
-    # Trend (4)
-    "close_sma5_ratio",
-    "close_sma20_ratio",
-    "close_sma60_ratio",
-    "macd",
-    # Momentum (5)
-    "macd_signal",
+    "ma5",
+    "ma30",
+    "ma60",
+    "ema5",
+    "ema30",
+    "ema60",
+    "macd_6_15_6",
+    "macd_12_26_9",
+    "macd_30_60_30",
     "rsi_14",
-    "stoch_k",
-    "stoch_d",
-    "roc_10",
-    # Volatility (3)
-    "atr_14_norm",
-    "bb_pct_b",
-    "bb_width",
-    # Volume (3)
-    "vol_sma20_ratio",
-    "obv_slope_10",
-    "vwap_close_ratio",
-    # Returns (1)
-    "log_return",
+    "willr_14",
+    "mom_14",
+    "cmo_14",
+    "ultosc",
+    "obv",
+    "adosc",
 ]
 
 
 class TechnicalFactors:
-    """Compute 16 scale-invariant technical indicators from OHLCV + VWAP data.
+    """Compute 16 raw technical indicators matching the reference paper.
 
-    All indicators are ratios, bounded values, or naturally small numbers so
-    they are roughly comparable across stocks.  A StandardScaler should still
-    be applied before feeding to a model.
+    Indicator set (all in raw talib units — no ratios, no scaling)::
+
+        ma5, ma30, ma60               simple moving averages of close
+        ema5, ema30, ema60            exponential moving averages of close
+        macd_6_15_6,                  MACD histogram, (fast, slow, signal)
+        macd_12_26_9,
+        macd_30_60_30
+        rsi_14                        relative strength index
+        willr_14                      Williams %R
+        mom_14                        absolute momentum (close - close.shift(14))
+        cmo_14                        Chande momentum oscillator
+        ultosc                        Ultimate Oscillator (7, 14, 28)
+        obv                           on-balance volume (cumulative)
+        adosc                         Chaikin A/D oscillator (3, 10)
+
+    Because the features span wildly different scales, the caller must apply
+    per-window min-max normalisation (see :class:`_LazyDataset`).  Rows where
+    any indicator is still in its warmup period are dropped.
     """
 
     def compute(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -44,61 +61,60 @@ class TechnicalFactors:
         Parameters
         ----------
         df:
-            DataFrame with columns: open, high, low, close, volume, vwap.
-            Index must be sorted ascending.
+            DataFrame with columns: open, high, low, close, volume.
+            Index must be sorted ascending.  (``vwap`` is not used.)
 
         Returns
         -------
-        DataFrame with columns from :data:`FACTOR_COLUMNS`.
-        Rows with NaN from indicator warmup periods are dropped.
+        DataFrame with columns from :data:`FACTOR_COLUMNS`, NaN warmup rows dropped.
         """
         close  = df["close"]
         high   = df["high"]
         low    = df["low"]
         volume = df["volume"]
-        vwap   = df["vwap"]
 
         f = pd.DataFrame(index=df.index)
 
-        # Trend (4)
-        f["close_sma5_ratio"]  = close / close.rolling(5).mean()
-        f["close_sma20_ratio"] = close / close.rolling(20).mean()
-        f["close_sma60_ratio"] = close / close.rolling(60).mean()
-        ema12 = close.ewm(span=12, adjust=False).mean()
-        ema26 = close.ewm(span=26, adjust=False).mean()
-        macd_line = (ema12 - ema26) / close
-        f["macd"] = macd_line
+        # Simple / exponential moving averages
+        f["ma5"]   = close.rolling(5).mean()
+        f["ma30"]  = close.rolling(30).mean()
+        f["ma60"]  = close.rolling(60).mean()
+        f["ema5"]  = _ema(close, 5)
+        f["ema30"] = _ema(close, 30)
+        f["ema60"] = _ema(close, 60)
 
-        # Momentum (5)
-        f["macd_signal"] = macd_line.ewm(span=9, adjust=False).mean()
-        f["rsi_14"]      = _rsi(close, 14) / 100.0
-        low_14  = low.rolling(14).min()
-        high_14 = high.rolling(14).max()
-        stoch_k = (close - low_14) / (high_14 - low_14)
-        f["stoch_k"] = stoch_k
-        f["stoch_d"] = stoch_k.rolling(3).mean()
-        f["roc_10"]  = close.pct_change(10)
+        # MACD histograms
+        f["macd_6_15_6"]   = _macd_hist(close, 6, 15, 6)
+        f["macd_12_26_9"]  = _macd_hist(close, 12, 26, 9)
+        f["macd_30_60_30"] = _macd_hist(close, 30, 60, 30)
 
-        # Volatility (3)
-        tr = _true_range(high, low, close)
-        f["atr_14_norm"] = tr.rolling(14).mean() / close
-        sma20   = close.rolling(20).mean()
-        std20   = close.rolling(20).std()
-        bb_upper = sma20 + 2 * std20
-        bb_lower = sma20 - 2 * std20
-        f["bb_pct_b"] = (close - bb_lower) / (bb_upper - bb_lower)
-        f["bb_width"] = (bb_upper - bb_lower) / sma20
+        # Oscillators
+        f["rsi_14"]   = _rsi(close, 14)
+        f["willr_14"] = _willr(high, low, close, 14)
+        f["mom_14"]   = close - close.shift(14)
+        f["cmo_14"]   = _cmo(close, 14)
+        f["ultosc"]   = _ultosc(high, low, close, 7, 14, 28)
 
-        # Volume (3)
-        f["vol_sma20_ratio"] = volume / volume.rolling(20).mean()
-        obv = _obv(close, volume)
-        f["obv_slope_10"]    = _rolling_slope(obv, 10)
-        f["vwap_close_ratio"] = vwap / close
-
-        # Returns (1)
-        f["log_return"] = np.log(close / close.shift(1))
+        # Volume-based
+        f["obv"]   = _obv(close, volume)
+        f["adosc"] = _adosc(high, low, close, volume, 3, 10)
 
         return f.dropna()
+
+
+# ------------------------------------------------------------------
+# Indicator primitives
+# ------------------------------------------------------------------
+
+
+def _ema(series: pd.Series, span: int) -> pd.Series:
+    return series.ewm(span=span, adjust=False, min_periods=span).mean()
+
+
+def _macd_hist(close: pd.Series, fast: int, slow: int, signal: int) -> pd.Series:
+    macd_line   = _ema(close, fast) - _ema(close, slow)
+    signal_line = macd_line.ewm(span=signal, adjust=False, min_periods=signal).mean()
+    return macd_line - signal_line
 
 
 def _rsi(close: pd.Series, period: int) -> pd.Series:
@@ -111,26 +127,56 @@ def _rsi(close: pd.Series, period: int) -> pd.Series:
     return 100 - 100 / (1 + rs)
 
 
-def _true_range(high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+def _willr(high: pd.Series, low: pd.Series, close: pd.Series, period: int) -> pd.Series:
+    hh = high.rolling(period).max()
+    ll = low.rolling(period).min()
+    return -100.0 * (hh - close) / (hh - ll)
+
+
+def _cmo(close: pd.Series, period: int) -> pd.Series:
+    delta    = close.diff()
+    gain     = delta.clip(lower=0)
+    loss     = -delta.clip(upper=0)
+    sum_gain = gain.rolling(period).sum()
+    sum_loss = loss.rolling(period).sum()
+    denom    = sum_gain + sum_loss
+    return 100.0 * (sum_gain - sum_loss) / denom.replace(0, np.nan)
+
+
+def _ultosc(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    p1: int,
+    p2: int,
+    p3: int,
+) -> pd.Series:
     prev_close = close.shift(1)
-    return pd.concat(
-        [high - low, (high - prev_close).abs(), (low - prev_close).abs()],
-        axis=1,
-    ).max(axis=1)
+    true_low   = pd.concat([low, prev_close], axis=1).min(axis=1)
+    true_high  = pd.concat([high, prev_close], axis=1).max(axis=1)
+    bp = close - true_low
+    tr = true_high - true_low
+
+    avg1 = bp.rolling(p1).sum() / tr.rolling(p1).sum()
+    avg2 = bp.rolling(p2).sum() / tr.rolling(p2).sum()
+    avg3 = bp.rolling(p3).sum() / tr.rolling(p3).sum()
+    return 100.0 * (4.0 * avg1 + 2.0 * avg2 + avg3) / 7.0
 
 
 def _obv(close: pd.Series, volume: pd.Series) -> pd.Series:
     return (volume * np.sign(close.diff())).cumsum()
 
 
-def _rolling_slope(series: pd.Series, window: int) -> pd.Series:
-    x = np.arange(window, dtype=np.float64)
-    x_c  = x - x.mean()
-    x_var = (x_c ** 2).sum()
-
-    def _slope(y: np.ndarray) -> float:
-        if len(y) < window:
-            return np.nan
-        return float((x_c * (y - y.mean())).sum() / x_var)
-
-    return series.rolling(window).apply(_slope, raw=True)
+def _adosc(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    volume: pd.Series,
+    fast: int,
+    slow: int,
+) -> pd.Series:
+    rng = (high - low).replace(0, np.nan)
+    mfm = ((close - low) - (high - close)) / rng
+    mfv = (mfm * volume).fillna(0.0)
+    ad  = mfv.cumsum()
+    return _ema(ad, fast) - _ema(ad, slow)

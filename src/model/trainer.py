@@ -13,8 +13,8 @@ from ..training import ComputeConfig, TrainingConfig
 
 logger = logging.getLogger(__name__)
 
-# Label semantics: 0 = sell, 1 = neutral, 2 = buy
-N_CLASSES = 3
+# Label semantics: 0 = down, 1 = up
+N_CLASSES = 2
 
 
 @dataclass
@@ -45,21 +45,21 @@ class EvalResult:
 
 
 class Trainer:
-    """Trains and evaluates a 3-class stock movement prediction model.
+    """Trains and evaluates a binary stock movement prediction model.
 
-    Classes: 0 = sell, 1 = neutral, 2 = buy.
+    Classes: 0 = down, 1 = up.
 
     Parameters
     ----------
     model:
         A model whose ``forward(tech, sentiment, sentiment_probs)``
-        returns logits of shape ``(batch, 3)``.
+        returns logits of shape ``(batch, 2)``.
     config:
         Training hyperparameters (lr, patience, n_epochs, …).
     compute_config:
         Hardware configuration (device, …).
     class_weights:
-        Optional weight tensor of shape ``(3,)`` for ``CrossEntropyLoss``.
+        Optional weight tensor of shape ``(2,)`` for ``CrossEntropyLoss``.
         Use to counteract class imbalance.
     """
 
@@ -88,9 +88,16 @@ class Trainer:
         np.random.seed(config.seed)
 
         optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode="min", factor=0.5, patience=config.scheduler_patience
-        )
+        if config.scheduler == "plateau":
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer, mode="min", factor=0.5, patience=config.scheduler_patience
+            )
+        elif config.scheduler == "step":
+            scheduler = torch.optim.lr_scheduler.StepLR(
+                optimizer, step_size=config.step_size, gamma=config.gamma
+            )
+        else:
+            raise ValueError(f"Unknown scheduler: {config.scheduler!r}")
         weight = (
             self._class_weights.to(compute.device)
             if self._class_weights is not None else None
@@ -112,7 +119,10 @@ class Trainer:
             history["val_loss"].append(val_metrics["loss"])
             history["val_auc"].append(val_metrics["auc"])
             history["val_accuracy"].append(val_metrics["accuracy"])
-            scheduler.step(val_metrics["loss"])
+            if config.scheduler == "plateau":
+                scheduler.step(val_metrics["loss"])
+            else:
+                scheduler.step()
 
             logger.info(
                 "Epoch %3d | train_loss=%.4f | val_loss=%.4f | val_auc=%.4f | val_acc=%.4f",
@@ -144,17 +154,18 @@ class Trainer:
         ci: float = 0.95,
         seed: int | None = None,
     ) -> EvalResult:
-        """Bootstrap confidence intervals for multiclass metrics.
+        """Bootstrap confidence intervals for binary metrics.
 
-        Computes macro-averaged AUC (one-vs-rest), accuracy, macro precision,
-        and macro recall with percentile bootstrap CIs.
+        Computes AUC (on P(up)), accuracy, precision, and recall for the
+        positive class with percentile bootstrap CIs.
         """
         probs, targets, _ = self._collect_predictions(loader)
-        preds    = probs.argmax(axis=1)
-        n        = len(targets)
-        rng      = np.random.default_rng(seed)
-        alpha    = 1.0 - ci
-        lo, hi   = alpha / 2 * 100, (1.0 - alpha / 2) * 100
+        preds     = probs.argmax(axis=1)
+        p_up      = probs[:, 1]
+        n         = len(targets)
+        rng       = np.random.default_rng(seed)
+        alpha     = 1.0 - ci
+        lo, hi    = alpha / 2 * 100, (1.0 - alpha / 2) * 100
 
         aucs:  list[float] = []
         accs:  list[float] = []
@@ -164,14 +175,14 @@ class Trainer:
 
         for _ in range(n_bootstrap):
             idx = rng.choice(n, size=n, replace=True)
-            t, p_prob, pr = targets[idx], probs[idx], preds[idx]
+            t, p_prob, pr = targets[idx], p_up[idx], preds[idx]
             try:
-                aucs.append(float(roc_auc_score(t, p_prob, multi_class="ovr", average="macro")))
+                aucs.append(float(roc_auc_score(t, p_prob)))
             except ValueError:
                 n_skipped += 1
             accs.append(float(accuracy_score(t, pr)))
-            precs.append(float(precision_score(t, pr, average="macro", zero_division=0)))
-            recs.append(float(recall_score(t, pr, average="macro", zero_division=0)))
+            precs.append(float(precision_score(t, pr, zero_division=0)))
+            recs.append(float(recall_score(t, pr, zero_division=0)))
 
         def _ci(samples: list[float]) -> tuple[float, float, float]:
             arr = np.array(samples)
@@ -195,26 +206,19 @@ class Trainer:
         self,
         loader: DataLoader,
         n_bins: int = 10,
-    ) -> dict[str, tuple[np.ndarray, np.ndarray]]:
-        """Compute per-class calibration (reliability) curves.
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Compute the calibration (reliability) curve for the positive class.
 
         Returns
         -------
-        Dict mapping class name to ``(fraction_of_positives, mean_predicted_value)``.
+        ``(fraction_of_positives, mean_predicted_value)`` for P(up).
         """
         from sklearn.calibration import calibration_curve as _sklearn_calibration_curve
 
         probs, targets, _ = self._collect_predictions(loader)
-        class_names = {0: "sell", 1: "neutral", 2: "buy"}
-        result = {}
-        for cls_idx, cls_name in class_names.items():
-            binary_targets = (targets == cls_idx).astype(int)
-            cls_probs = probs[:, cls_idx]
-            fraction_pos, mean_pred = _sklearn_calibration_curve(
-                binary_targets, cls_probs, n_bins=n_bins, strategy="uniform",
-            )
-            result[cls_name] = (fraction_pos, mean_pred)
-        return result
+        return _sklearn_calibration_curve(
+            targets, probs[:, 1], n_bins=n_bins, strategy="uniform",
+        )
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -242,7 +246,8 @@ class Trainer:
             logits = model(tech, sentiment, sentiment_probs)
             loss   = criterion(logits, targets)
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            if self._config.grad_clip is not None:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=self._config.grad_clip)
             optimizer.step()
 
             total_loss += loss.item() * len(targets)
@@ -255,7 +260,7 @@ class Trainer:
         probs, targets, total_loss = self._collect_predictions(loader, criterion)
         preds = probs.argmax(axis=1)
         try:
-            auc = float(roc_auc_score(targets, probs, multi_class="ovr", average="macro"))
+            auc = float(roc_auc_score(targets, probs[:, 1]))
         except ValueError:
             auc = 0.5
         return {
@@ -273,7 +278,7 @@ class Trainer:
 
         Returns
         -------
-        ``(probs, targets, total_loss)`` where probs has shape ``(N, 3)``.
+        ``(probs, targets, total_loss)`` where probs has shape ``(N, 2)``.
         """
         model  = self._model
         device = self._compute.device

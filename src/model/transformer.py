@@ -5,14 +5,14 @@ import torch.nn as nn
 
 
 class SentimentTransformer(nn.Module):
-    """Transformer encoder for 3-class stock movement prediction with sentiment fusion.
+    """Transformer encoder for binary stock movement prediction with sentiment fusion.
 
-    Classes: 0 = sell, 1 = neutral, 2 = buy.
+    Classes: 0 = down, 1 = up.
 
     Architecture::
 
-        sentiment_proj : Linear(sentiment_dim → n_factors)
-        input_proj     : Linear(n_factors*2 + n_sentiment_probs → d_model)
+        sentiment_proj : Linear(sentiment_dim → sent_proj_dim)
+        input_proj     : Linear(n_factors + sent_proj_dim + n_sentiment_probs → d_model)
         pos_embedding  : Embedding(max_seq_len, d_model)   [learned]
         encoder        : TransformerEncoder(d_model, nhead, n_layers, dim_feedforward)
         classifier     : Linear(d_model → n_classes)
@@ -29,6 +29,7 @@ class SentimentTransformer(nn.Module):
         self,
         n_factors: int = 16,
         sentiment_dim: int = 768,
+        sent_proj_dim: int = 64,
         d_model: int = 64,
         nhead: int = 4,
         n_layers: int = 6,
@@ -36,14 +37,14 @@ class SentimentTransformer(nn.Module):
         dropout: float = 0.2,
         n_sentiment_probs: int = 0,
         max_seq_len: int = 100,
-        n_classes: int = 3,
+        n_classes: int = 2,
     ) -> None:
         super().__init__()
         self.n_sentiment_probs = n_sentiment_probs
         self.n_classes = n_classes
 
-        self.sentiment_proj = nn.Linear(sentiment_dim, n_factors)
-        self.input_proj     = nn.Linear(n_factors * 2 + n_sentiment_probs, d_model)
+        self.sentiment_proj = nn.Linear(sentiment_dim, sent_proj_dim)
+        self.input_proj     = nn.Linear(n_factors + sent_proj_dim + n_sentiment_probs, d_model)
         self.pos_embedding  = nn.Embedding(max_seq_len, d_model)
 
         encoder_layer = nn.TransformerEncoderLayer(

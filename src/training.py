@@ -51,9 +51,52 @@ class TrainingConfig:
     weight_decay: float = 1e-4
     patience: int = 15
     dropout: float = 0.3
-    target_threshold: float = 0.01
     seed: int = 42
-    scheduler_patience: int = 5
+    # Scheduler: "plateau" (ReduceLROnPlateau) or "step" (StepLR).
+    scheduler: str = "plateau"
+    scheduler_patience: int = 5      # only for "plateau"
+    step_size: int = 10              # only for "step"
+    gamma: float = 0.1               # LR decay factor for "step"
+    # Gradient clipping max-norm; None disables.
+    grad_clip: float | None = 1.0
+
+    @classmethod
+    def for_lstm(cls, **overrides) -> "TrainingConfig":
+        """Factory: defaults tuned for the LSTM (window=20)."""
+        base = dict(window=20)
+        base.update(overrides)
+        return cls(**base)
+
+    @classmethod
+    def for_transformer(cls, **overrides) -> "TrainingConfig":
+        """Factory: defaults tuned for the Transformer (window=64)."""
+        base = dict(window=64)
+        base.update(overrides)
+        return cls(**base)
+
+    @classmethod
+    def reference(cls, **overrides) -> "TrainingConfig":
+        """Factory: hyperparameters matching the reference paper.
+
+        ``lr=1e-3``, ``weight_decay=0``, ``StepLR(step_size=10, gamma=0.1)``,
+        no gradient clipping, 150 epochs, early stopping disabled
+        (``patience = n_epochs``), ``window=20`` (LSTM convention in the
+        paper — override to ``64`` for the transformer).
+        """
+        base = dict(
+            window=20,
+            batch_size=16,
+            n_epochs=150,
+            lr=1e-3,
+            weight_decay=0.0,
+            patience=150,
+            scheduler="step",
+            step_size=10,
+            gamma=0.1,
+            grad_clip=None,
+        )
+        base.update(overrides)
+        return cls(**base)
 
 
 @dataclass

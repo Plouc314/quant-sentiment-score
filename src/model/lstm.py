@@ -5,15 +5,15 @@ import torch.nn as nn
 
 
 class SentimentLSTM(nn.Module):
-    """LSTM for 3-class stock movement prediction with sentiment fusion.
+    """LSTM for binary stock movement prediction with sentiment fusion.
 
-    Classes: 0 = sell, 1 = neutral, 2 = buy.
+    Classes: 0 = down, 1 = up.
 
     Architecture::
 
-        sentiment_proj : Linear(sentiment_dim → n_factors)
-        lstm           : LSTM(n_factors + n_factors + n_sentiment_probs, hidden_size, num_layers)
-                         ↑ tech_dim   ↑ sent_proj_dim  ↑ FinBERT probs
+        sentiment_proj : Linear(sentiment_dim → sent_proj_dim)
+        lstm           : LSTM(n_factors + sent_proj_dim + n_sentiment_probs, hidden_size, num_layers)
+                         ↑ tech_dim   ↑ sentiment width  ↑ FinBERT probs
         classifier     : Linear(hidden_size, hidden_size)
                          → ReLU → Dropout → BatchNorm1d → Linear(n_classes)
     """
@@ -22,21 +22,20 @@ class SentimentLSTM(nn.Module):
         self,
         n_factors: int = 16,
         sentiment_dim: int = 768,
-        hidden_size: int = 32,
+        sent_proj_dim: int = 64,
+        hidden_size: int = 64,
         num_layers: int = 2,
         dropout: float = 0.2,
         n_sentiment_probs: int = 0,
-        n_classes: int = 3,
+        n_classes: int = 2,
     ) -> None:
         super().__init__()
         self.n_sentiment_probs = n_sentiment_probs
         self.n_classes = n_classes
 
-        self.sentiment_proj = nn.Linear(sentiment_dim, n_factors)
-        tech_dim = n_factors        # 16 technical indicators
-        sent_proj_dim = n_factors   # sentiment embedding projected to same width
+        self.sentiment_proj = nn.Linear(sentiment_dim, sent_proj_dim)
         self.lstm = nn.LSTM(
-            input_size=tech_dim + sent_proj_dim + n_sentiment_probs,
+            input_size=n_factors + sent_proj_dim + n_sentiment_probs,
             hidden_size=hidden_size,
             num_layers=num_layers,
             batch_first=True,

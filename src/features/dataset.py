@@ -5,7 +5,6 @@ import logging
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import StandardScaler
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 
 from .technical import TechnicalFactors
@@ -34,10 +33,6 @@ class StockDataset:
         disables sentiment — zero vectors are used for all days.
     window:
         Sliding window size in trading days.
-    target_threshold:
-        Minimum absolute percent return to assign a label.  Returns inside
-        ``(-threshold, +threshold)`` are dropped (NaN).  ``0.0`` reproduces
-        the original ``close[t+2] > close[t-1]`` target.
     """
 
     def __init__(
@@ -46,19 +41,19 @@ class StockDataset:
         price_df: pd.DataFrame,
         sentiment_df: pd.DataFrame | None = None,
         window: int = 64,
-        target_threshold: float = 0.0,
     ) -> None:
         self.symbol = symbol
         self.window = window
 
-        min_rows = 60 + window + 2
+        # Warmup: longest indicator is macd_30_60_30 → slow=60 + signal=30 - 1 = 89 NaN rows.
+        min_rows = 90 + window + 3
         if len(price_df) < min_rows:
             raise RuntimeError(
-                f"{symbol}: need ≥ {min_rows} rows (60 warmup + window={window} + 2 target rows),"
+                f"{symbol}: need ≥ {min_rows} rows (90 warmup + window={window} + 3 target rows),"
                 f" got {len(price_df)}"
             )
 
-        targets = _compute_targets(price_df["close"], threshold=target_threshold)
+        targets = _compute_targets(price_df["close"])
         factors_df = TechnicalFactors().compute(price_df)
 
         targets = targets.reindex(factors_df.index, fill_value=-1)
@@ -95,7 +90,11 @@ class StockDataset:
 
 
 class DataLoaderBuilder:
-    """Splits symbols by cutoff, fits scalers on train data, and creates DataLoaders.
+    """Splits symbols by cutoff and creates DataLoaders.
+
+    Technical features are min-max normalized **per window** inside the
+    Dataset (see :class:`_LazyDataset`) — matching the reference
+    implementation — so no global scaler is fitted here.
 
     Parameters
     ----------
@@ -121,13 +120,9 @@ class DataLoaderBuilder:
         self._split = split
         self._config = config
         self._compute = compute_config
-        self._tech_scaler: StandardScaler | None = None
 
     def build(self) -> tuple[DataLoader, DataLoader, DataLoader]:
-        """Compute temporal splits, fit scalers on train, return DataLoaders.
-
-        Must be called before :meth:`build_held_out_loader` or accessing
-        :attr:`tech_scaler`.
+        """Compute temporal splits and return DataLoaders.
 
         Returns
         -------
@@ -137,9 +132,8 @@ class DataLoaderBuilder:
         batch_size  = self._config.batch_size
         num_workers = self._compute.num_workers
 
-        # Pass 1 — compute per-symbol split indices and collect train rows for scaling
         split_indices: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
-        tech_train_rows: list[np.ndarray] = []
+        any_train = False
 
         for symbol in self._split.train_symbols:
             ds = self._datasets.get(symbol)
@@ -153,18 +147,12 @@ class DataLoaderBuilder:
             val_idx   = np.where((dates >= val_start) & (dates < cutoff))[0]
             test_idx  = np.where(dates >= cutoff)[0]
             split_indices[symbol] = (train_idx, val_idx, test_idx)
-
             if len(train_idx) > 0:
-                flat_end = int(train_idx[-1]) + ds.window
-                tech_train_rows.append(ds.X_tech[:flat_end])
+                any_train = True
 
-        if not tech_train_rows:
+        if not any_train:
             raise RuntimeError("No training data found — check that datasets and split match")
 
-        self._tech_scaler = StandardScaler()
-        self._tech_scaler.fit(np.concatenate(tech_train_rows, axis=0))
-
-        # Pass 2 — build _LazyDataset instances per symbol/split
         train_lazy: list[_LazyDataset] = []
         val_lazy:   list[_LazyDataset] = []
         test_lazy:  list[_LazyDataset] = []
@@ -188,13 +176,7 @@ class DataLoaderBuilder:
         )
 
     def build_held_out_loader(self, batch_size: int | None = None) -> DataLoader:
-        """Build a DataLoader for held-out symbols using the fitted scalers.
-
-        Must be called after :meth:`build`.
-        """
-        if self._tech_scaler is None:
-            raise RuntimeError("Call build() before build_held_out_loader()")
-
+        """Build a DataLoader for held-out symbols."""
         bs          = batch_size or self._config.batch_size
         num_workers = self._compute.num_workers
         lazy_list: list[_LazyDataset] = []
@@ -209,12 +191,6 @@ class DataLoaderBuilder:
         return _make_loader(lazy_list, bs, shuffle=False, num_workers=num_workers)
 
     @property
-    def tech_scaler(self) -> StandardScaler:
-        if self._tech_scaler is None:
-            raise RuntimeError("Call build() first")
-        return self._tech_scaler
-
-    @property
     def n_sentiment_probs(self) -> int:
         for s in self._split.train_symbols:
             if s in self._datasets:
@@ -222,9 +198,7 @@ class DataLoaderBuilder:
         return 0
 
     def _make_lazy(self, ds: StockDataset, indices: np.ndarray) -> _LazyDataset:
-        X_tech_t = torch.tensor(
-            self._tech_scaler.transform(ds.X_tech).astype(np.float32)  # type: ignore[union-attr]
-        ).share_memory_()
+        X_tech_t  = torch.tensor(ds.X_tech).share_memory_()
         X_sent_t  = torch.tensor(ds.X_sent).share_memory_()
         X_sprob_t = torch.tensor(ds.X_sprob).share_memory_()
 
@@ -237,7 +211,12 @@ class DataLoaderBuilder:
 
 
 class _LazyDataset(Dataset):
-    """Materialises sliding windows on-the-fly from shared flat tensors."""
+    """Materialises sliding windows on-the-fly from shared flat tensors.
+
+    Technical features are min-max normalized per window (column-wise) to
+    match the reference implementation — each window is self-contained so
+    the model sees relative shapes, not absolute levels.
+    """
 
     def __init__(
         self,
@@ -260,8 +239,12 @@ class _LazyDataset(Dataset):
 
     def __getitem__(self, i: int) -> tuple[torch.Tensor, ...]:
         wi = int(self.indices[i])
+        tech_win = self.X_tech[wi: wi + self.window]
+        mn = tech_win.min(dim=0, keepdim=True).values
+        mx = tech_win.max(dim=0, keepdim=True).values
+        tech_win = (tech_win - mn) / (mx - mn).clamp(min=1e-8)
         return (
-            self.X_tech [wi: wi + self.window],
+            tech_win,
             self.X_sent [wi: wi + self.window],
             self.X_sprob[wi: wi + self.window],
             self.y[i],
@@ -273,22 +256,19 @@ class _LazyDataset(Dataset):
 # ------------------------------------------------------------------
 
 
-def _compute_targets(close: pd.Series, threshold: float = 0.01) -> pd.Series:
-    """Three-class target: sell (0), neutral (1), buy (2).
+def _compute_targets(close: pd.Series) -> pd.Series:
+    """Binary target: down (0), up (1).
 
-    pct_return = (close[t+2] - close[t]) / close[t]
+    Matches the reference paper's target: at the last-window-day anchor ``t``,
+    compare ``close[t+3]`` against ``close[t]`` — a 3-day forward return.
+    (In the paper's notation with window ``[i, i+size-1]``: ``close[i+size+2]
+    > close[i+size-1]``.)
 
-    - 0 (sell)    if pct_return < -threshold
-    - 1 (neutral) if |pct_return| <= threshold
-    - 2 (buy)     if pct_return > threshold
-    - NaN         for the last 2 rows where close[t+2] is unavailable
+    The last 3 rows have no future close and are flagged with -1 so the
+    caller can drop them.
     """
-    future = close.shift(-2)
-    pct    = (future - close) / close
-
-    target = pd.Series(1, index=close.index, dtype=np.int64)  # default: neutral
-    target[pct > threshold]  = 2   # buy
-    target[pct < -threshold] = 0   # sell
+    future = close.shift(-3)
+    target = (future > close).astype(np.int64)
     target[future.isna()] = -1     # sentinel for missing future
     return target
 
