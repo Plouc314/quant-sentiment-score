@@ -108,12 +108,37 @@ class TechnicalFactors:
 
 
 def _ema(series: pd.Series, span: int) -> pd.Series:
-    return series.ewm(span=span, adjust=False, min_periods=span).mean()
+    """EMA matching talib: seeds with SMA of the first ``span`` valid values.
+
+    talib initialises the filter at the first index that has ``span``
+    non-NaN lookback values with their simple average, then applies
+    alpha = 2/(span+1) recursively.  Leading NaN values in ``series``
+    (e.g. the MACD line passed to the signal-line EMA) are skipped so
+    that the seed is always computed from ``span`` real observations.
+    """
+    alpha = 2.0 / (span + 1)
+    arr = series.to_numpy(dtype=float)
+    n   = len(arr)
+    out = np.full(n, np.nan)
+
+    # skip any leading NaNs (matches talib's MACD signal-line behaviour)
+    first = 0
+    while first < n and np.isnan(arr[first]):
+        first += 1
+
+    seed_end = first + span          # exclusive; index of first EMA output
+    if seed_end > n:
+        return pd.Series(out, index=series.index, name=series.name)
+
+    out[seed_end - 1] = arr[first:seed_end].mean()   # SMA seed — matches talib
+    for i in range(seed_end, n):
+        out[i] = alpha * arr[i] + (1.0 - alpha) * out[i - 1]
+    return pd.Series(out, index=series.index, name=series.name)
 
 
 def _macd_hist(close: pd.Series, fast: int, slow: int, signal: int) -> pd.Series:
     macd_line   = _ema(close, fast) - _ema(close, slow)
-    signal_line = macd_line.ewm(span=signal, adjust=False, min_periods=signal).mean()
+    signal_line = _ema(macd_line, signal)
     return macd_line - signal_line
 
 

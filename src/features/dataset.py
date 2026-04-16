@@ -88,6 +88,12 @@ class StockDataset:
     def n_sentiment_probs(self) -> int:
         return self.X_sprob.shape[1]
 
+    @property
+    def anchor_has_sentiment(self) -> np.ndarray:
+        """Boolean mask over windows: ``True`` when the anchor day has a non-zero embedding."""
+        anchor_embs = self.X_sent[self.window - 1:]  # (n_windows, 768)
+        return np.linalg.norm(anchor_embs, axis=1) > 0
+
 
 class DataLoaderBuilder:
     """Splits symbols by cutoff and creates DataLoaders.
@@ -203,6 +209,62 @@ class DataLoaderBuilder:
         X_sprob_t = torch.tensor(ds.X_sprob).share_memory_()
 
         return _LazyDataset(X_tech_t, X_sent_t, X_sprob_t, ds.y, ds.window, indices)
+
+
+def build_per_stock_loaders(
+    ds: StockDataset,
+    cutoff: str = "2023-06-01",
+    val_frac: float = 0.1,
+    batch_size: int = 16,
+    num_workers: int = 0,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Build train/val/test DataLoaders for a single stock with sentiment gating.
+
+    Only windows whose anchor day has a non-zero sentiment embedding are
+    included.  Pre-cutoff windows are split chronologically into train
+    (first 90 %) and val (last 10 %).  Post-cutoff windows form the test set.
+    Validation and test loaders use full-batch evaluation (matching the
+    reference implementation).
+
+    Returns ``(train_loader, val_loader, test_loader)``.
+    """
+    mask = ds.anchor_has_sentiment
+    dates = pd.DatetimeIndex(ds.dates)
+    cutoff_ts = pd.Timestamp(cutoff)
+
+    valid_idx = np.where(mask)[0]
+    valid_dates = dates[valid_idx]
+
+    pre = valid_idx[valid_dates < cutoff_ts]
+    post = valid_idx[valid_dates >= cutoff_ts]
+
+    n_val = max(1, int(len(pre) * val_frac))
+    train_idx = pre[:-n_val]
+    val_idx = pre[-n_val:]
+    test_idx = post
+
+    logger.info(
+        "%s — sentiment-gated: train=%d, val=%d, test=%d (of %d total windows)",
+        ds.symbol, len(train_idx), len(val_idx), len(test_idx), ds.n_windows,
+    )
+
+    X_tech_t = torch.tensor(ds.X_tech).share_memory_()
+    X_sent_t = torch.tensor(ds.X_sent).share_memory_()
+    X_sprob_t = torch.tensor(ds.X_sprob).share_memory_()
+
+    def _make(indices: np.ndarray, shuffle: bool) -> DataLoader:
+        if len(indices) == 0:
+            return DataLoader(ConcatDataset([]), batch_size=batch_size)
+        lazy = _LazyDataset(X_tech_t, X_sent_t, X_sprob_t, ds.y, ds.window, indices)
+        return DataLoader(
+            lazy,
+            batch_size=batch_size if shuffle else len(lazy),
+            shuffle=shuffle,
+            drop_last=shuffle,
+            num_workers=num_workers,
+        )
+
+    return _make(train_idx, True), _make(val_idx, False), _make(test_idx, False)
 
 
 # ------------------------------------------------------------------

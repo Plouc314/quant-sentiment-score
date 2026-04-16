@@ -23,7 +23,7 @@ class SentimentLSTM(nn.Module):
         n_factors: int = 16,
         sentiment_dim: int = 768,
         sent_proj_dim: int = 64,
-        hidden_size: int = 64,
+        hidden_size: int = 32,
         num_layers: int = 2,
         dropout: float = 0.2,
         n_sentiment_probs: int = 0,
@@ -43,9 +43,9 @@ class SentimentLSTM(nn.Module):
         )
         self.classifier = nn.Sequential(
             nn.Linear(hidden_size, hidden_size),
-            nn.BatchNorm1d(hidden_size),
             nn.ReLU(),
             nn.Dropout(dropout),
+            nn.BatchNorm1d(hidden_size),
             nn.Linear(hidden_size, n_classes),
         )
         self._init_weights()
