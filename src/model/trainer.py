@@ -52,7 +52,7 @@ class Trainer:
     Parameters
     ----------
     model:
-        A model whose ``forward(tech, sentiment, sentiment_probs)``
+        A model whose ``forward(tech, sentiment)``
         returns logits of shape ``(batch, 2)``.
     config:
         Training hyperparameters (lr, patience, n_epochs, …).
@@ -236,14 +236,13 @@ class Trainer:
         total_loss = 0.0
         n_samples  = 0
 
-        for tech, sentiment, sentiment_probs, targets in loader:
-            tech            = tech.to(device)
-            sentiment       = sentiment.to(device)
-            sentiment_probs = sentiment_probs.to(device)
-            targets         = targets.to(device)
+        for tech, sentiment, targets in loader:
+            tech      = tech.to(device)
+            sentiment = sentiment.to(device)
+            targets   = targets.to(device)
 
             optimizer.zero_grad()
-            logits = model(tech, sentiment, sentiment_probs)
+            logits = model(tech, sentiment)
             loss   = criterion(logits, targets)
             loss.backward()
             if self._config.grad_clip is not None:
@@ -288,13 +287,12 @@ class Trainer:
         total_loss = 0.0
 
         with torch.no_grad():
-            for tech, sentiment, sentiment_probs, targets in loader:
-                tech            = tech.to(device)
-                sentiment       = sentiment.to(device)
-                sentiment_probs = sentiment_probs.to(device)
-                targets         = targets.to(device)
+            for tech, sentiment, targets in loader:
+                tech      = tech.to(device)
+                sentiment = sentiment.to(device)
+                targets   = targets.to(device)
 
-                logits = model(tech, sentiment, sentiment_probs)
+                logits = model(tech, sentiment)
                 if criterion is not None:
                     total_loss += criterion(logits, targets).item() * len(targets)
 

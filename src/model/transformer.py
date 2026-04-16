@@ -9,10 +9,11 @@ class SentimentTransformer(nn.Module):
 
     Classes: 0 = down, 1 = up.
 
-    Architecture::
+    Architecture (matches reference paper)::
 
-        sentiment_proj : Linear(sentiment_dim → sent_proj_dim)
-        input_proj     : Linear(n_factors + sent_proj_dim + n_sentiment_probs → d_model)
+        sentiment_proj : Linear(sentiment_dim → n_factors)
+        cat_relu       : ReLU applied after [tech ‖ projected_sentiment]
+        input_proj     : Linear(n_factors * 2 → d_model)
         pos_embedding  : Embedding(max_seq_len, d_model)   [learned]
         encoder        : TransformerEncoder(d_model, nhead, n_layers, dim_feedforward)
         classifier     : Linear(d_model → n_classes)
@@ -29,22 +30,20 @@ class SentimentTransformer(nn.Module):
         self,
         n_factors: int = 16,
         sentiment_dim: int = 768,
-        sent_proj_dim: int = 64,
         d_model: int = 64,
         nhead: int = 4,
         n_layers: int = 6,
         dim_feedforward: int = 128,
         dropout: float = 0.2,
-        n_sentiment_probs: int = 0,
         max_seq_len: int = 100,
         n_classes: int = 2,
     ) -> None:
         super().__init__()
-        self.n_sentiment_probs = n_sentiment_probs
         self.n_classes = n_classes
 
-        self.sentiment_proj = nn.Linear(sentiment_dim, sent_proj_dim)
-        self.input_proj     = nn.Linear(n_factors + sent_proj_dim + n_sentiment_probs, d_model)
+        self.sentiment_proj = nn.Linear(sentiment_dim, n_factors)
+        self.cat_relu       = nn.ReLU()
+        self.input_proj     = nn.Linear(n_factors * 2, d_model)
         self.pos_embedding  = nn.Embedding(max_seq_len, d_model)
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -63,14 +62,12 @@ class SentimentTransformer(nn.Module):
         self,
         tech: torch.Tensor,
         sentiment: torch.Tensor,
-        sentiment_probs: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Parameters
         ----------
-        tech:            ``(batch, window, n_factors)``
-        sentiment:       ``(batch, window, sentiment_dim)``
-        sentiment_probs: ``(batch, window, n_sentiment_probs)`` or ``None``
+        tech:      ``(batch, window, n_factors)``
+        sentiment: ``(batch, window, sentiment_dim)``
 
         Returns
         -------
@@ -83,15 +80,8 @@ class SentimentTransformer(nn.Module):
             )
 
         projected = self.sentiment_proj(sentiment)
-        parts = [tech, projected]
-        if self.n_sentiment_probs > 0:
-            if sentiment_probs is None or sentiment_probs.shape[-1] == 0:
-                raise RuntimeError(
-                    f"model expects n_sentiment_probs={self.n_sentiment_probs} but received empty tensor"
-                )
-            parts.append(sentiment_probs)
-
-        x = self.input_proj(torch.cat(parts, dim=-1))
+        x = self.cat_relu(torch.cat([tech, projected], dim=-1))
+        x = self.input_proj(x)
         x = x + self.pos_embedding(torch.arange(window, device=tech.device).unsqueeze(0))
         pooled = self.dropout(self.encoder(x).mean(dim=1))
         return self.classifier(pooled)

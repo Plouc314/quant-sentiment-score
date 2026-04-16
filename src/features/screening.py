@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from ..repositories.articles import ArticleRepository
+from ..repositories.sentiment import SentimentRepository
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,67 @@ def apply_momentum_gate(
     )
     mask = slopes > 0
     return probs[mask], targets[mask], mask
+
+
+def sentiment_polar_ranking(
+    repository: SentimentRepository,
+    tickers: list[str],
+    min_days: int = 1,
+) -> pd.DataFrame:
+    """Rank tickers by the fraction of days that received a positive sentiment prediction.
+
+    Matches the paper's ``sentiment_polar_ranking.py``:
+    ``positive_ratio = count(sentiment_score > 0.5) / n_days``.
+
+    We use the continuous ``sentiment_score`` column (output of
+    :func:`~src.embeddings.pipeline.aggregate_daily`) and apply the same
+    threshold of 0.5 that the paper uses to binarise its ALBERT predictions.
+
+    Parameters
+    ----------
+    repository:
+        SentimentRepository containing precomputed daily sentiment aggregates.
+    tickers:
+        Universe of ticker symbols to evaluate.
+    min_days:
+        Minimum number of sentiment days required for a ticker to be included.
+        Tickers with fewer days are kept in the output but flagged with
+        ``passes=False``.
+
+    Returns
+    -------
+    DataFrame with columns ``[ticker, positive_ratio, n_days, passes]``,
+    sorted descending by ``positive_ratio``.  Tickers with no sentiment data
+    are included with ``positive_ratio=0.0`` and ``n_days=0``.
+    """
+    rows = []
+    for ticker in tickers:
+        if not repository.exists(ticker):
+            rows.append({"ticker": ticker, "positive_ratio": 0.0, "n_days": 0})
+            continue
+        try:
+            df = repository.load(ticker)
+        except Exception:
+            logger.warning("Failed to load sentiment for %s — skipping", ticker)
+            rows.append({"ticker": ticker, "positive_ratio": 0.0, "n_days": 0})
+            continue
+        n_days = len(df)
+        if n_days == 0:
+            rows.append({"ticker": ticker, "positive_ratio": 0.0, "n_days": 0})
+            continue
+        positive_ratio = float((df["sentiment_score"] > 0.5).mean())
+        rows.append({"ticker": ticker, "positive_ratio": positive_ratio, "n_days": n_days})
+
+    result = pd.DataFrame(rows)
+    result["passes"] = result["n_days"] >= min_days
+    result = result.sort_values("positive_ratio", ascending=False).reset_index(drop=True)
+
+    n_pass = result["passes"].sum()
+    logger.info(
+        "Sentiment polar ranking: %d/%d tickers pass (min_days=%d)",
+        n_pass, len(tickers), min_days,
+    )
+    return result[["ticker", "positive_ratio", "n_days", "passes"]]
 
 
 def screen_by_coverage(
