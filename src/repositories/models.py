@@ -5,13 +5,11 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-from sklearn.preprocessing import StandardScaler
 
 
 @dataclass
 class ModelCheckpoint:
     state_dict: dict
-    tech_scaler: StandardScaler
     config: dict
     """Architecture + training config needed to reconstruct the model."""
 
@@ -19,8 +17,10 @@ class ModelCheckpoint:
 class ModelRepository:
     """Saves and loads trained model checkpoints.
 
-    Each checkpoint bundles the model state dict, fitted scalers, and
-    the architecture config required to reconstruct the model for inference.
+    Each checkpoint bundles the model state dict and the architecture
+    config required to reconstruct the model for inference.  Feature
+    normalization is performed per-window inside the Dataset, so no
+    fitted scaler needs to be persisted.
 
     Layout::
 
@@ -39,7 +39,6 @@ class ModelRepository:
         self,
         name: str,
         model: nn.Module,
-        tech_scaler: StandardScaler,
         config: dict,
     ) -> None:
         """Save a checkpoint as ``<data_dir>/<name>.pt``."""
@@ -47,7 +46,6 @@ class ModelRepository:
         torch.save(
             {
                 "state_dict": model.state_dict(),
-                "tech_scaler": tech_scaler,
                 "config": config,
             },
             self._data_dir / f"{name}.pt",
@@ -61,7 +59,6 @@ class ModelRepository:
         data = torch.load(path, map_location="cpu", weights_only=False)
         return ModelCheckpoint(
             state_dict=data["state_dict"],
-            tech_scaler=data["tech_scaler"],
             config=data["config"],
         )
 

@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 # Mapping: FPB index → FinBERT index
 _FPB_TO_FINBERT: list[int] = [1, 2, 0]
 
+_ACCURACY_METRIC = evaluate.load("accuracy")
+_F1_METRIC = evaluate.load("f1")
+
 
 def fine_tune_finbert(
     output_dir: str | Path,
@@ -178,10 +181,8 @@ def _remap_labels(example: dict) -> dict:
 
 
 def _compute_metrics(pred: EvalPrediction) -> dict[str, float]:
-    accuracy_metric = evaluate.load("accuracy")
-    f1_metric = evaluate.load("f1")
     preds = np.argmax(pred.predictions, axis=-1)
     return {
-        **accuracy_metric.compute(predictions=preds, references=pred.label_ids),
-        **f1_metric.compute(predictions=preds, references=pred.label_ids, average="macro"),
+        **_ACCURACY_METRIC.compute(predictions=preds, references=pred.label_ids),
+        **_F1_METRIC.compute(predictions=preds, references=pred.label_ids, average="macro"),
     }

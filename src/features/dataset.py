@@ -5,7 +5,6 @@ import logging
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import StandardScaler
 from torch.utils.data import ConcatDataset, DataLoader, Dataset
 
 from .technical import TechnicalFactors
@@ -42,29 +41,30 @@ class StockDataset:
         price_df: pd.DataFrame,
         sentiment_df: pd.DataFrame | None = None,
         window: int = 64,
+        horizon: int = 3,
     ) -> None:
-        self.symbol = symbol
-        self.window = window
+        self.symbol  = symbol
+        self.window  = window
+        self.horizon = horizon
 
-        min_rows = 60 + window + 2
+        # Warmup: longest indicator is macd_30_60_30 → slow=60 + signal=30 - 1 = 89 NaN rows.
+        min_rows = 90 + window + horizon
         if len(price_df) < min_rows:
             raise RuntimeError(
-                f"{symbol}: need ≥ {min_rows} rows (60 warmup + window={window} + 2 target rows),"
+                f"{symbol}: need ≥ {min_rows} rows (90 warmup + window={window} + horizon={horizon}),"
                 f" got {len(price_df)}"
             )
 
-        targets = _compute_targets(price_df["close"])
+        targets = _compute_targets(price_df["close"], horizon=horizon)
         factors_df = TechnicalFactors().compute(price_df)
 
-        targets = targets.reindex(factors_df.index)
+        targets = targets.reindex(factors_df.index, fill_value=-1)
         embeddings = _align_embeddings(factors_df.index, sentiment_df, symbol)
-        sent_probs = _align_sent_probs(factors_df.index, sentiment_df, symbol)
 
-        valid = targets.notna()
-        self.X_tech: np.ndarray  = factors_df[valid].values.astype(np.float32)
-        self.X_sent: np.ndarray  = embeddings[valid.values]
-        self.X_sprob: np.ndarray = sent_probs[valid.values]
-        targets_arr = targets[valid].values.astype(np.float32)
+        valid = targets >= 0  # drop sentinel (-1) for missing future close
+        self.X_tech: np.ndarray = factors_df[valid].values.astype(np.float32)
+        self.X_sent: np.ndarray = embeddings[valid.values]
+        targets_arr = targets[valid].values.astype(np.int64)
         factor_dates = factors_df.index[valid]
 
         T = len(targets_arr)
@@ -75,22 +75,25 @@ class StockDataset:
         self.y: np.ndarray     = targets_arr[window - 1:]
         self.dates: np.ndarray = factor_dates[window - 1:].values
 
-        logger.info(
-            "%s: %d windows, %d tech, %d sent_prob features",
-            symbol, N, self.X_tech.shape[1], self.X_sprob.shape[1],
-        )
+        logger.info("%s: %d windows, %d tech features", symbol, N, self.X_tech.shape[1])
 
     @property
     def n_windows(self) -> int:
         return len(self.y)
 
     @property
-    def n_sentiment_probs(self) -> int:
-        return self.X_sprob.shape[1]
+    def anchor_has_sentiment(self) -> np.ndarray:
+        """Boolean mask over windows: ``True`` when the anchor day has a non-zero embedding."""
+        anchor_embs = self.X_sent[self.window - 1:]  # (n_windows, 768)
+        return np.linalg.norm(anchor_embs, axis=1) > 0
 
 
 class DataLoaderBuilder:
-    """Splits symbols by cutoff, fits scalers on train data, and creates DataLoaders.
+    """Splits symbols by cutoff and creates DataLoaders.
+
+    Technical features are min-max normalized **per window** inside the
+    Dataset (see :class:`_LazyDataset`) — matching the reference
+    implementation — so no global scaler is fitted here.
 
     Parameters
     ----------
@@ -116,13 +119,9 @@ class DataLoaderBuilder:
         self._split = split
         self._config = config
         self._compute = compute_config
-        self._tech_scaler: StandardScaler | None = None
 
     def build(self) -> tuple[DataLoader, DataLoader, DataLoader]:
-        """Compute temporal splits, fit scalers on train, return DataLoaders.
-
-        Must be called before :meth:`build_held_out_loader` or accessing
-        :attr:`tech_scaler`.
+        """Compute temporal splits and return DataLoaders.
 
         Returns
         -------
@@ -132,9 +131,8 @@ class DataLoaderBuilder:
         batch_size  = self._config.batch_size
         num_workers = self._compute.num_workers
 
-        # Pass 1 — compute per-symbol split indices and collect train rows for scaling
         split_indices: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
-        tech_train_rows: list[np.ndarray] = []
+        any_train = False
 
         for symbol in self._split.train_symbols:
             ds = self._datasets.get(symbol)
@@ -148,18 +146,12 @@ class DataLoaderBuilder:
             val_idx   = np.where((dates >= val_start) & (dates < cutoff))[0]
             test_idx  = np.where(dates >= cutoff)[0]
             split_indices[symbol] = (train_idx, val_idx, test_idx)
-
             if len(train_idx) > 0:
-                flat_end = int(train_idx[-1]) + ds.window
-                tech_train_rows.append(ds.X_tech[:flat_end])
+                any_train = True
 
-        if not tech_train_rows:
+        if not any_train:
             raise RuntimeError("No training data found — check that datasets and split match")
 
-        self._tech_scaler = StandardScaler()
-        self._tech_scaler.fit(np.concatenate(tech_train_rows, axis=0))
-
-        # Pass 2 — build _LazyDataset instances per symbol/split
         train_lazy: list[_LazyDataset] = []
         val_lazy:   list[_LazyDataset] = []
         test_lazy:  list[_LazyDataset] = []
@@ -183,13 +175,7 @@ class DataLoaderBuilder:
         )
 
     def build_held_out_loader(self, batch_size: int | None = None) -> DataLoader:
-        """Build a DataLoader for held-out symbols using the fitted scalers.
-
-        Must be called after :meth:`build`.
-        """
-        if self._tech_scaler is None:
-            raise RuntimeError("Call build() before build_held_out_loader()")
-
+        """Build a DataLoader for held-out symbols."""
         bs          = batch_size or self._config.batch_size
         num_workers = self._compute.num_workers
         lazy_list: list[_LazyDataset] = []
@@ -203,27 +189,65 @@ class DataLoaderBuilder:
         logger.info("DataLoaderBuilder — held-out: %d windows", sum(len(d) for d in lazy_list))
         return _make_loader(lazy_list, bs, shuffle=False, num_workers=num_workers)
 
-    @property
-    def tech_scaler(self) -> StandardScaler:
-        if self._tech_scaler is None:
-            raise RuntimeError("Call build() first")
-        return self._tech_scaler
-
-    @property
-    def n_sentiment_probs(self) -> int:
-        for s in self._split.train_symbols:
-            if s in self._datasets:
-                return self._datasets[s].n_sentiment_probs
-        return 0
-
     def _make_lazy(self, ds: StockDataset, indices: np.ndarray) -> _LazyDataset:
-        X_tech_t = torch.tensor(
-            self._tech_scaler.transform(ds.X_tech).astype(np.float32)  # type: ignore[union-attr]
-        ).share_memory_()
-        X_sent_t  = torch.tensor(ds.X_sent).share_memory_()
-        X_sprob_t = torch.tensor(ds.X_sprob).share_memory_()
+        X_tech_t = torch.tensor(ds.X_tech).share_memory_()
+        X_sent_t = torch.tensor(ds.X_sent).share_memory_()
+        return _LazyDataset(X_tech_t, X_sent_t, ds.y, ds.window, indices)
 
-        return _LazyDataset(X_tech_t, X_sent_t, X_sprob_t, ds.y, ds.window, indices)
+
+def build_per_stock_loaders(
+    ds: StockDataset,
+    cutoff: str = "2023-06-01",
+    val_frac: float = 0.1,
+    batch_size: int = 16,
+    num_workers: int = 0,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Build train/val/test DataLoaders for a single stock with sentiment gating.
+
+    Only windows whose anchor day has a non-zero sentiment embedding are
+    included.  Pre-cutoff windows are split chronologically into train
+    (first 90 %) and val (last 10 %).  Post-cutoff windows form the test set.
+    Validation and test loaders use full-batch evaluation (matching the
+    reference implementation).
+
+    Returns ``(train_loader, val_loader, test_loader)``.
+    """
+    mask = ds.anchor_has_sentiment
+    dates = pd.DatetimeIndex(ds.dates)
+    cutoff_ts = pd.Timestamp(cutoff)
+
+    valid_idx = np.where(mask)[0]
+    valid_dates = dates[valid_idx]
+
+    pre = valid_idx[valid_dates < cutoff_ts]
+    post = valid_idx[valid_dates >= cutoff_ts]
+
+    n_val = max(1, int(len(pre) * val_frac))
+    train_idx = pre[:-n_val]
+    val_idx = pre[-n_val:]
+    test_idx = post
+
+    logger.info(
+        "%s — sentiment-gated: train=%d, val=%d, test=%d (of %d total windows)",
+        ds.symbol, len(train_idx), len(val_idx), len(test_idx), ds.n_windows,
+    )
+
+    X_tech_t = torch.tensor(ds.X_tech).share_memory_()
+    X_sent_t = torch.tensor(ds.X_sent).share_memory_()
+
+    def _make(indices: np.ndarray, shuffle: bool) -> DataLoader:
+        if len(indices) == 0:
+            return DataLoader(ConcatDataset([]), batch_size=batch_size)
+        lazy = _LazyDataset(X_tech_t, X_sent_t, ds.y, ds.window, indices)
+        return DataLoader(
+            lazy,
+            batch_size=batch_size if shuffle else len(lazy),
+            shuffle=shuffle,
+            drop_last=shuffle,
+            num_workers=num_workers,
+        )
+
+    return _make(train_idx, True), _make(val_idx, False), _make(test_idx, False)
 
 
 # ------------------------------------------------------------------
@@ -232,35 +256,37 @@ class DataLoaderBuilder:
 
 
 class _LazyDataset(Dataset):
-    """Materialises sliding windows on-the-fly from shared flat tensors."""
+    """Materialises sliding windows on-the-fly from shared flat tensors.
+
+    Technical features are min-max normalized per window (column-wise) to
+    match the reference implementation — each window is self-contained so
+    the model sees relative shapes, not absolute levels.
+    """
 
     def __init__(
         self,
         X_tech:  torch.Tensor,
         X_sent:  torch.Tensor,
-        X_sprob: torch.Tensor,
         y:       np.ndarray,
         window:  int,
         indices: np.ndarray,
     ) -> None:
         self.X_tech  = X_tech
         self.X_sent  = X_sent
-        self.X_sprob = X_sprob
-        self.y       = torch.tensor(y[indices], dtype=torch.float32)
+        self.y       = torch.tensor(y[indices], dtype=torch.long)
         self.window  = window
         self.indices = indices
 
     def __len__(self) -> int:
         return len(self.indices)
 
-    def __getitem__(self, i: int) -> tuple[torch.Tensor, ...]:
+    def __getitem__(self, i: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         wi = int(self.indices[i])
-        return (
-            self.X_tech [wi: wi + self.window],
-            self.X_sent [wi: wi + self.window],
-            self.X_sprob[wi: wi + self.window],
-            self.y[i],
-        )
+        tech_win = self.X_tech[wi: wi + self.window]
+        mn = tech_win.min(dim=0, keepdim=True).values
+        mx = tech_win.max(dim=0, keepdim=True).values
+        tech_win = (tech_win - mn) / (mx - mn).clamp(min=1e-8)
+        return tech_win, self.X_sent[wi: wi + self.window], self.y[i]
 
 
 # ------------------------------------------------------------------
@@ -268,12 +294,16 @@ class _LazyDataset(Dataset):
 # ------------------------------------------------------------------
 
 
-def _compute_targets(close: pd.Series) -> pd.Series:
-    """Binary target: 1 if close[t+2] > close[t-1] (3-day executable signal)."""
-    future = close.shift(-2)
-    past   = close.shift(1)
-    target = (future > past).astype(np.float32)
-    target[future.isna() | past.isna()] = np.nan
+def _compute_targets(close: pd.Series, horizon: int = 3) -> pd.Series:
+    """Binary target: down (0), up (1).
+
+    At anchor day ``t``: label is ``1`` if ``close[t + horizon] > close[t]``.
+    The last ``horizon`` rows have no future close and are flagged with ``-1``
+    so the caller can drop them.
+    """
+    future = close.shift(-horizon)
+    target = (future > close).astype(np.int64)
+    target[future.isna()] = -1     # sentinel for missing future
     return target
 
 
@@ -295,24 +325,6 @@ def _align_embeddings(
             result[i] = emb
     return result
 
-
-def _align_sent_probs(
-    index: pd.DatetimeIndex,
-    sentiment_df: pd.DataFrame | None,
-    symbol: str,
-) -> np.ndarray:
-    if sentiment_df is None or sentiment_df.empty or "sentiment_probs" not in sentiment_df.columns:
-        return np.zeros((len(index), 0), dtype=np.float32)
-    rows = sentiment_df[sentiment_df["ticker"] == symbol]
-    if rows.empty:
-        return np.zeros((len(index), 3), dtype=np.float32)
-    lookup = {pd.Timestamp(d).date(): p for d, p in zip(rows["date"], rows["sentiment_probs"])}
-    result = np.zeros((len(index), 3), dtype=np.float32)
-    for i, ts in enumerate(index):
-        p = lookup.get(ts.date())
-        if p is not None:
-            result[i] = p
-    return result
 
 
 def _make_loader(
