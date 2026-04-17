@@ -26,13 +26,15 @@ class SentimentLSTM(nn.Module):
         num_layers: int = 2,
         dropout: float = 0.2,
         n_classes: int = 2,
+        sentiment_proj_dim: int | None = None,
     ) -> None:
         super().__init__()
         self.n_classes = n_classes
 
-        self.sentiment_proj = nn.Linear(sentiment_dim, n_factors)
+        proj_dim = sentiment_proj_dim if sentiment_proj_dim is not None else n_factors
+        self.sentiment_proj = nn.Linear(sentiment_dim, proj_dim)
         self.lstm = nn.LSTM(
-            input_size=n_factors * 2,
+            input_size=n_factors + proj_dim,
             hidden_size=hidden_size,
             num_layers=num_layers,
             batch_first=True,

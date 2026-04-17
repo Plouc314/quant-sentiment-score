@@ -6,7 +6,14 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    brier_score_loss,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from torch.utils.data import DataLoader
 
 from ..training import ComputeConfig, TrainingConfig
@@ -40,6 +47,15 @@ class EvalResult:
     recall_mean:    float
     recall_ci_low:  float
     recall_ci_high: float
+    brier_mean:    float
+    brier_ci_low:  float
+    brier_ci_high: float
+    ece_mean:      float
+    ece_ci_low:    float
+    ece_ci_high:   float
+    pr_auc_mean:   float
+    pr_auc_ci_low: float
+    pr_auc_ci_high: float
     n_bootstrap: int
     n_samples:   int
 
@@ -167,10 +183,13 @@ class Trainer:
         alpha     = 1.0 - ci
         lo, hi    = alpha / 2 * 100, (1.0 - alpha / 2) * 100
 
-        aucs:  list[float] = []
-        accs:  list[float] = []
-        precs: list[float] = []
-        recs:  list[float] = []
+        aucs:    list[float] = []
+        accs:    list[float] = []
+        precs:   list[float] = []
+        recs:    list[float] = []
+        briers:  list[float] = []
+        eces:    list[float] = []
+        pr_aucs: list[float] = []
         n_skipped = 0
 
         for _ in range(n_bootstrap):
@@ -178,11 +197,14 @@ class Trainer:
             t, p_prob, pr = targets[idx], p_up[idx], preds[idx]
             try:
                 aucs.append(float(roc_auc_score(t, p_prob)))
+                pr_aucs.append(float(average_precision_score(t, p_prob)))
             except ValueError:
                 n_skipped += 1
             accs.append(float(accuracy_score(t, pr)))
             precs.append(float(precision_score(t, pr, zero_division=0)))
             recs.append(float(recall_score(t, pr, zero_division=0)))
+            briers.append(float(brier_score_loss(t, p_prob)))
+            eces.append(float(_expected_calibration_error(t, p_prob)))
 
         def _ci(samples: list[float]) -> tuple[float, float, float]:
             arr = np.array(samples)
@@ -192,12 +214,18 @@ class Trainer:
         cm, cl, ch = _ci(accs)
         pm, pl, ph = _ci(precs)
         rm, rl, rh = _ci(recs)
+        bm, bl, bh = _ci(briers)
+        em, el, eh = _ci(eces)
+        pam, pal, pah = _ci(pr_aucs)
 
         return EvalResult(
-            auc_mean=am,      auc_ci_low=al,      auc_ci_high=ah,
-            accuracy_mean=cm,    accuracy_ci_low=cl,    accuracy_ci_high=ch,
-            precision_mean=pm,   precision_ci_low=pl,   precision_ci_high=ph,
-            recall_mean=rm,   recall_ci_low=rl,   recall_ci_high=rh,
+            auc_mean=am,       auc_ci_low=al,       auc_ci_high=ah,
+            accuracy_mean=cm,  accuracy_ci_low=cl,   accuracy_ci_high=ch,
+            precision_mean=pm, precision_ci_low=pl,  precision_ci_high=ph,
+            recall_mean=rm,    recall_ci_low=rl,     recall_ci_high=rh,
+            brier_mean=bm,     brier_ci_low=bl,      brier_ci_high=bh,
+            ece_mean=em,       ece_ci_low=el,        ece_ci_high=eh,
+            pr_auc_mean=pam,   pr_auc_ci_low=pal,    pr_auc_ci_high=pah,
             n_bootstrap=n_bootstrap - n_skipped,
             n_samples=n,
         )
@@ -303,3 +331,29 @@ class Trainer:
         targets_arr = np.concatenate(all_targets)
 
         return probs_arr, targets_arr, total_loss
+
+
+def _expected_calibration_error(
+    y_true: np.ndarray,
+    y_prob: np.ndarray,
+    n_bins: int = 10,
+) -> float:
+    """Expected Calibration Error (Naeini et al., 2015).
+
+    Bins predicted probabilities into ``n_bins`` uniform intervals over [0, 1]
+    and returns the weighted mean of ``|mean_predicted - fraction_positive|``
+    across non-empty bins.
+    """
+    bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+    bin_ids = np.digitize(y_prob, bin_edges[1:-1])  # 0 .. n_bins-1
+
+    ece = 0.0
+    for b in range(n_bins):
+        mask = bin_ids == b
+        count = mask.sum()
+        if count == 0:
+            continue
+        fraction_positive = y_true[mask].mean()
+        mean_predicted = y_prob[mask].mean()
+        ece += (count / len(y_true)) * abs(mean_predicted - fraction_positive)
+    return ece

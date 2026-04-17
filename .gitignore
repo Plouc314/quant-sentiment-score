@@ -9,3 +9,8 @@ data/**/*.txt
 .ipynb_checkpoints
 plan.md
 *.parquet
+data/experiments/
+data/experiments_fast/
+data/models/
+data/splits_fast.yml
+configs_fast/

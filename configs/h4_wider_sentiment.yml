@@ -1,0 +1,44 @@
+baseline_checkpoint: null
+bootstrap_seed: 42
+compute:
+  device: cpu
+  n_threads: null
+  num_workers: 0
+d_model: 64
+description: 'Sentiment projection: 768->64 instead of 768->16'
+dim_feedforward: 128
+has_news_feature: false
+hidden_size: 64
+horizon: 3
+model_type: lstm
+n_bootstrap: 1000
+n_encoder_layers: 2
+name: h4_wider_sentiment
+nhead: 4
+num_layers: 2
+pos_weight: null
+price_years:
+- 2018
+- 2019
+- 2020
+- 2021
+- 2022
+- 2023
+- 2024
+sentiment_proj_dim: 64
+split_path: data/splits.yml
+target_threshold: null
+training:
+  batch_size: 32
+  dropout: 0.3
+  gamma: 0.1
+  grad_clip: 1.0
+  lr: 0.0003
+  n_epochs: 100
+  patience: 15
+  scheduler: plateau
+  scheduler_patience: 5
+  seed: 42
+  step_size: 10
+  weight_decay: 0.0001
+  window: 20

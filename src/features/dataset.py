@@ -42,6 +42,8 @@ class StockDataset:
         sentiment_df: pd.DataFrame | None = None,
         window: int = 64,
         horizon: int = 3,
+        target_threshold: float | None = None,
+        has_news_feature: bool = False,
     ) -> None:
         self.symbol  = symbol
         self.window  = window
@@ -55,14 +57,21 @@ class StockDataset:
                 f" got {len(price_df)}"
             )
 
-        targets = _compute_targets(price_df["close"], horizon=horizon)
+        targets = _compute_targets(price_df["close"], horizon=horizon, threshold=target_threshold)
         factors_df = TechnicalFactors().compute(price_df)
 
         targets = targets.reindex(factors_df.index, fill_value=-1)
         embeddings = _align_embeddings(factors_df.index, sentiment_df, symbol)
 
         valid = targets >= 0  # drop sentinel (-1) for missing future close
-        self.X_tech: np.ndarray = factors_df[valid].values.astype(np.float32)
+        tech_values = factors_df[valid].values.astype(np.float32)
+
+        if has_news_feature:
+            has_news = (np.linalg.norm(embeddings, axis=1) > 0).astype(np.float32)
+            has_news = has_news[valid.values].reshape(-1, 1)
+            tech_values = np.hstack([tech_values, has_news])
+
+        self.X_tech: np.ndarray = tech_values
         self.X_sent: np.ndarray = embeddings[valid.values]
         targets_arr = targets[valid].values.astype(np.int64)
         factor_dates = factors_df.index[valid]
@@ -294,15 +303,27 @@ class _LazyDataset(Dataset):
 # ------------------------------------------------------------------
 
 
-def _compute_targets(close: pd.Series, horizon: int = 3) -> pd.Series:
+def _compute_targets(
+    close: pd.Series,
+    horizon: int = 3,
+    threshold: float | None = None,
+) -> pd.Series:
     """Binary target: down (0), up (1).
 
     At anchor day ``t``: label is ``1`` if ``close[t + horizon] > close[t]``.
+    When *threshold* is set, label is ``1`` if the return
+    ``(close[t + horizon] - close[t]) / close[t]`` exceeds *threshold*
+    (filters out noise near the decision boundary).
+
     The last ``horizon`` rows have no future close and are flagged with ``-1``
     so the caller can drop them.
     """
     future = close.shift(-horizon)
-    target = (future > close).astype(np.int64)
+    if threshold is not None:
+        ret = (future - close) / close
+        target = (ret > threshold).astype(np.int64)
+    else:
+        target = (future > close).astype(np.int64)
     target[future.isna()] = -1     # sentinel for missing future
     return target
 
@@ -333,11 +354,14 @@ def _make_loader(
     shuffle: bool,
     num_workers: int,
 ) -> DataLoader:
+    if not lazy_list:
+        from torch.utils.data import TensorDataset
+        return DataLoader(TensorDataset(), batch_size=batch_size)
     return DataLoader(
-        ConcatDataset(lazy_list) if lazy_list else ConcatDataset([]),
+        ConcatDataset(lazy_list),
         batch_size=batch_size,
         shuffle=shuffle,
         drop_last=shuffle,
         num_workers=num_workers,
-        persistent_workers=(num_workers > 0 and bool(lazy_list)),
+        persistent_workers=num_workers > 0,
     )

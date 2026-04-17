@@ -37,13 +37,15 @@ class SentimentTransformer(nn.Module):
         dropout: float = 0.2,
         max_seq_len: int = 100,
         n_classes: int = 2,
+        sentiment_proj_dim: int | None = None,
     ) -> None:
         super().__init__()
         self.n_classes = n_classes
 
-        self.sentiment_proj = nn.Linear(sentiment_dim, n_factors)
+        proj_dim = sentiment_proj_dim if sentiment_proj_dim is not None else n_factors
+        self.sentiment_proj = nn.Linear(sentiment_dim, proj_dim)
         self.cat_relu       = nn.ReLU()
-        self.input_proj     = nn.Linear(n_factors * 2, d_model)
+        self.input_proj     = nn.Linear(n_factors + proj_dim, d_model)
         self.pos_embedding  = nn.Embedding(max_seq_len, d_model)
 
         encoder_layer = nn.TransformerEncoderLayer(
