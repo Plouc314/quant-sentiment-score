@@ -59,6 +59,8 @@ class TrainingConfig:
     gamma: float = 0.1               # LR decay factor for "step"
     # Gradient clipping max-norm; None disables.
     grad_clip: float | None = 1.0
+    # Early stopping criterion: "loss" (lower is better) or "auc" (higher is better).
+    early_stopping_metric: str = "loss"
 
     @classmethod
     def for_lstm(cls, **overrides) -> "TrainingConfig":

@@ -27,7 +27,7 @@ price_years:
 - 2024
 sentiment_proj_dim: 64
 split_path: data/splits.yml
-target_threshold: null
+target_threshold: 0.005
 training:
   batch_size: 32
   dropout: 0.3
@@ -38,6 +38,7 @@ training:
   patience: 15
   scheduler: plateau
   scheduler_patience: 5
+  early_stopping_metric: auc
   seed: 42
   step_size: 10
   weight_decay: 0.0001

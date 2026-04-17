@@ -145,7 +145,12 @@ class Trainer:
                 epoch, train_loss, val_metrics["loss"], val_metrics["auc"], val_metrics["accuracy"],
             )
 
-            if val_metrics["loss"] < best_loss:
+            improved = (
+                val_metrics["auc"] > best_auc
+                if config.early_stopping_metric == "auc"
+                else val_metrics["loss"] < best_loss
+            )
+            if improved:
                 best_loss  = val_metrics["loss"]
                 best_auc   = val_metrics["auc"]
                 best_epoch = epoch
