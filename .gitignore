@@ -14,3 +14,5 @@ data/experiments_fast/
 data/models/
 data/splits_fast.yml
 configs_fast/
+configs_combo/
+data/experiments_combo/
