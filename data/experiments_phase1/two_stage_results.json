@@ -1,0 +1,6 @@
+{
+  "n_samples": 16460,
+  "stage1_direction_auc": 0.5249105052556139,
+  "stage2_magnitude_auc": 0.6025677648892049,
+  "two_stage_vs_direction_auc": 0.5225450833134258
+}

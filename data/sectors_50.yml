@@ -1,0 +1,63 @@
+# Sector mapping for the 50-symbol sentiment-rich universe (data/splits_fast.yml).
+# Grouped into 5 supersectors so each has 8-13 symbols (enough to train a model).
+# GICS-inspired but coarsened — Real Estate (AMT) folded into Financials.
+
+tech_communication:
+  - AAPL
+  - MSFT
+  - GOOGL
+  - META
+  - NVDA
+  - AMD
+  - AVGO
+  - ADBE
+  - INTC
+  - ORCL
+  - TSM
+  - NFLX
+  - T
+  - VZ
+  - DIS
+
+healthcare:
+  - PFE
+  - JNJ
+  - MRK
+  - ABBV
+  - LLY
+  - UNH
+
+financials:
+  - JPM
+  - BAC
+  - GS
+  - MS
+  - MA
+  - V
+  - AMT  # REIT, lumped in for size
+
+consumer:
+  - AMZN
+  - MCD
+  - NKE
+  - TSLA
+  - COST
+  - WMT
+  - PG
+  - HD
+  - SBUX
+  - KO
+
+industrial_energy:
+  - XOM
+  - CVX
+  - COP
+  - SLB
+  - CAT
+  - GE
+  - HON
+  - LMT
+  - LIN
+  - DUK
+  - NEE
+  - BA

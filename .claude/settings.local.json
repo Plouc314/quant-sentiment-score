@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(.venv/Scripts/python -c ' *)",
+      "Bash(tasklist)",
+      "Bash(cmd *)",
+      "Bash(.venv/Scripts/python scripts/run_sweep.py --configs-dir configs_fast --results-dir data/experiments_fast)",
+      "Bash(python *)",
+      "Bash(git *)",
+      "Bash(.venv/Scripts/python *)"
+    ]
+  }
+}

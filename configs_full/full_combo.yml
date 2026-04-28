@@ -1,0 +1,45 @@
+baseline_checkpoint: null
+bootstrap_seed: 42
+compute:
+  device: cpu
+  n_threads: null
+  num_workers: 0
+d_model: 64
+description: Full 992-symbol H1+H4 combo (adopted winner)
+dim_feedforward: 128
+has_news_feature: false
+hidden_size: 64
+horizon: 3
+model_type: lstm
+n_bootstrap: 500
+n_encoder_layers: 2
+name: full_combo
+nhead: 4
+num_layers: 2
+pos_weight: null
+price_years:
+- 2018
+- 2019
+- 2020
+- 2021
+- 2022
+- 2023
+- 2024
+sentiment_proj_dim: 64
+split_path: data/splits.yml
+target_threshold: 0.005
+training:
+  batch_size: 32
+  dropout: 0.3
+  early_stopping_metric: auc
+  gamma: 0.1
+  grad_clip: 1.0
+  lr: 0.0003
+  n_epochs: 50
+  patience: 10
+  scheduler: plateau
+  scheduler_patience: 5
+  seed: 42
+  step_size: 10
+  weight_decay: 0.0001
+  window: 20
